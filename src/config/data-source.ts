@@ -13,4 +13,5 @@ export const AppDataSource = new DataSource({
     serviceName: process.env.DB_SERVICE,
     synchronize: false,      // NUNCA true — el schema lo maneja SQL Developer
     logging: true,           // muestra queries en consola durante desarrollo
+    entities: ["src/entities/*.ts"],
 });

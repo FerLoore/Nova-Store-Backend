@@ -8,14 +8,23 @@ const app = express();
 // Seguridad
 app.use(helmet());
 
-// CORS: acepta múltiples orígenes separados por coma desde FRONTEND_SERVICE
+// CORS: acepta múltiples orígenes o usa localhost por defecto en desarrollo
 const rawOrigins = process.env.FRONTEND_SERVICE;
-let corsOrigin: string | string[] | false = false;
-if (rawOrigins && rawOrigins !== "null") {
-    const origins = rawOrigins.split(",").map((o) => o.trim()).filter(Boolean);
-    corsOrigin = origins.length === 1 ? origins[0] : origins;
+let corsOrigin: any = ["http://localhost:5173", "http://localhost:5174"];
+if (rawOrigins && rawOrigins !== "null" && rawOrigins.trim() !== "") {
+    if (rawOrigins === "*") {
+        corsOrigin = true;
+    } else {
+        const origins = rawOrigins.split(",").map((o) => o.trim()).filter(Boolean);
+        corsOrigin = origins.length === 1 ? origins[0] : origins;
+    }
 }
-app.use(cors({ origin: corsOrigin }));
+app.use(cors({
+    origin: corsOrigin,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 // Parseo de body
 app.use(express.json({ limit: "50mb" }));

@@ -14,6 +14,7 @@ import novaVarianteRoutes  from "./src/routes/novaVariante.routes";
 import novaProveedorRoutes from "./src/routes/novaProveedor.routes";
 import novaCompraRoutes    from "./src/routes/novaCompra.routes";
 import novaInventarioRoutes from "./src/routes/novaInventario.routes";
+import novaVentaRoutes      from "./src/routes/novaVenta.routes";
 
 const router = Router();
 
@@ -106,6 +107,15 @@ router.use("/nova-inventario",
         escritura: ["PRODUCTOS_GESTIONAR"]
     }),
     novaInventarioRoutes
+);
+
+router.use("/nova-venta",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaVentaRoutes
 );
 
 export default router;

@@ -86,8 +86,28 @@ function extractVarianteId(req: Request): number | null {
 export const getVariantes = async (req: Request, res: Response): Promise<void> => {
     try {
         const productoId = extractProductoId(req);
+        const skuQuery = trimOrNull(req.query.sku as string);
+        const searchQuery = trimOrNull(req.query.search as string);
+
         if (!productoId) {
-            res.status(400).json({ message: "El parámetro producto_id es obligatorio para listar sus variantes" });
+            // Permitir búsqueda global por SKU o listado para el módulo de ventas
+            const qb = varianteRepo()
+                .createQueryBuilder("v")
+                .innerJoinAndSelect("v.producto", "p")
+                .where("v.variante_activo = 1")
+                .andWhere("p.producto_activo = 1");
+
+            if (skuQuery) {
+                qb.andWhere("UPPER(v.variante_sku) LIKE :sku", { sku: `%${skuQuery.toUpperCase()}%` });
+            }
+            if (searchQuery) {
+                qb.andWhere("(UPPER(v.variante_sku) LIKE :q OR UPPER(p.producto_nombre) LIKE :q)", {
+                    q: `%${searchQuery.toUpperCase()}%`
+                });
+            }
+
+            const variantes = await qb.orderBy("p.producto_nombre", "ASC").addOrderBy("v.variante_sku", "ASC").getMany();
+            res.json(variantes);
             return;
         }
 
@@ -105,6 +125,7 @@ export const getVariantes = async (req: Request, res: Response): Promise<void> =
 
         const variantes = await varianteRepo().find({
             where: whereClause,
+            relations: { producto: true },
             order: { variante_id: "ASC" }
         });
 

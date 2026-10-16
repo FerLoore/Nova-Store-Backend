@@ -154,6 +154,17 @@ export const createProducto = async (req: Request, res: Response): Promise<void>
         }
         if (allErrors.length) { res.status(400).json({ message: allErrors.join("; ") }); return; }
 
+        // Validar que los SKUs no existan previamente en la base de datos
+        for (const vData of varianteParsed) {
+            const existingSku = await varianteRepo().findOne({
+                where: { variante_sku: vData.variante_sku }
+            });
+            if (existingSku) {
+                res.status(400).json({ message: `El SKU "${vData.variante_sku}" ya se encuentra registrado en el sistema` });
+                return;
+            }
+        }
+
         // Crear producto con variantes en una transacción
         const result = await AppDataSource.transaction(async (manager) => {
             const producto = manager.create(NovaProducto, {
@@ -241,81 +252,11 @@ export const deleteProducto = async (req: Request, res: Response): Promise<void>
     }
 };
 
-// POST /:id/variantes — agregar variante a producto existente
-export const addVariante = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const productoId = parseIntId(req.params.id);
-        if (!productoId) { res.status(400).json({ message: "ID de producto inválido" }); return; }
+// Re-exportar operaciones de variantes con validación de SKU y filtro por PRODU_PRODUCTO
+export {
+    createVariante as addVariante,
+    updateVariante,
+    deleteVariante,
+    getVariantesByProducto
+} from "./novaVariante.handler";
 
-        const producto = await productoRepo().findOneBy({ producto_id: productoId, producto_activo: 1 });
-        if (!producto) { res.status(404).json({ message: "Producto no encontrado" }); return; }
-
-        const { errors, data } = parseVariante(req.body, 0);
-        if (errors.length) { res.status(400).json({ message: errors.join("; ") }); return; }
-
-        const variante = varianteRepo().create({ ...data, producto } as any);
-        const result = await varianteRepo().save(variante);
-        res.status(201).json(result);
-    } catch (error: any) {
-        console.error("ERROR CREANDO VARIANTE:", error);
-        if (getOraCode(error) === "ORA-00001")
-            { res.status(400).json({ message: "El SKU ya existe, o la combinación producto/talla/color está repetida" }); return; }
-        res.status(500).json({ message: "Error creando variante" });
-    }
-};
-
-// PUT /variante/:id — modificar variante
-export const updateVariante = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const id = parseIntId(req.params.id);
-        if (!id) { res.status(400).json({ message: "ID de variante inválido" }); return; }
-
-        const variante = await varianteRepo().findOneBy({ variante_id: id, variante_activo: 1 });
-        if (!variante) { res.status(404).json({ message: "Variante no encontrada" }); return; }
-
-        const { variante_talla, variante_color, variante_sku, variante_precio_compra, variante_precio_venta, variante_stock_minimo } = req.body;
-
-        if (variante_talla  !== undefined) variante.variante_talla  = String(variante_talla).toUpperCase();
-        if (variante_color  !== undefined) variante.variante_color  = String(variante_color);
-        if (variante_sku    !== undefined) variante.variante_sku    = String(variante_sku).toUpperCase();
-        if (variante_precio_venta !== undefined) {
-            const pv = Number(variante_precio_venta);
-            if (isNaN(pv) || pv < 0) { res.status(400).json({ message: "variante_precio_venta debe ser >= 0" }); return; }
-            variante.variante_precio_venta = round2(pv);
-        }
-        if (variante_precio_compra !== undefined) {
-            const pc = variante_precio_compra === null ? null : Number(variante_precio_compra);
-            if (pc !== null && (isNaN(pc) || pc < 0)) { res.status(400).json({ message: "variante_precio_compra debe ser >= 0" }); return; }
-            variante.variante_precio_compra = pc !== null ? round2(pc) : null;
-        }
-        if (variante_stock_minimo !== undefined) {
-            const sm = variante_stock_minimo === null ? null : Number(variante_stock_minimo);
-            if (sm !== null && (!Number.isInteger(sm) || sm < 0)) { res.status(400).json({ message: "variante_stock_minimo debe ser entero >= 0" }); return; }
-            variante.variante_stock_minimo = sm;
-        }
-
-        const result = await varianteRepo().save(variante);
-        res.json(result);
-    } catch (error: any) {
-        console.error("ERROR ACTUALIZANDO VARIANTE:", error);
-        if (getOraCode(error) === "ORA-00001")
-            { res.status(400).json({ message: "El SKU ya existe, o la combinación producto/talla/color está repetida" }); return; }
-        res.status(500).json({ message: "Error actualizando variante" });
-    }
-};
-
-// DELETE /variante/:id — borrado lógico de variante
-export const deleteVariante = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const id = parseIntId(req.params.id);
-        if (!id) { res.status(400).json({ message: "ID de variante inválido" }); return; }
-        const variante = await varianteRepo().findOneBy({ variante_id: id });
-        if (!variante) { res.status(404).json({ message: "Variante no encontrada" }); return; }
-        variante.variante_activo = 0;
-        await varianteRepo().save(variante);
-        res.json({ ok: true, message: "Variante desactivada correctamente" });
-    } catch (error) {
-        console.error("ERROR DESACTIVANDO VARIANTE:", error);
-        res.status(500).json({ message: "Error eliminando variante" });
-    }
-};

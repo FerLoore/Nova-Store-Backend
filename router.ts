@@ -9,7 +9,12 @@ import novaUsuarioRoutes from "./src/routes/novaUsuario.routes";
 import novaPermisoRoutes from "./src/routes/novaPermiso.routes";
 import novaClienteRoutes from "./src/routes/novaCliente.routes";
 import novaCategoriaRoutes from "./src/routes/novaCategoria.routes";
-import novaProductoRoutes from "./src/routes/novaProducto.routes";
+import novaProductoRoutes  from "./src/routes/novaProducto.routes";
+import novaVarianteRoutes  from "./src/routes/novaVariante.routes";
+import novaProveedorRoutes from "./src/routes/novaProveedor.routes";
+import novaCompraRoutes    from "./src/routes/novaCompra.routes";
+import novaInventarioRoutes from "./src/routes/novaInventario.routes";
+import novaVentaRoutes      from "./src/routes/novaVenta.routes";
 
 const router = Router();
 
@@ -66,6 +71,51 @@ router.use("/nova-producto",
         escritura: ["PRODUCTOS_GESTIONAR"]
     }),
     novaProductoRoutes
+);
+
+router.use("/nova-variante",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaVarianteRoutes
+);
+
+router.use("/nova-proveedor",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaProveedorRoutes
+);
+
+router.use("/nova-compra",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaCompraRoutes
+);
+
+router.use("/nova-inventario",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaInventarioRoutes
+);
+
+router.use("/nova-venta",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaVentaRoutes
 );
 
 export default router;

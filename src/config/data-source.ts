@@ -10,6 +10,15 @@ import { NovaCliente }  from "../entities/novaCliente";
 import { NovaCategoria } from "../entities/novaCategoria";
 import { NovaProducto } from "../entities/novaProducto";
 import { NovaVariante } from "../entities/novaVariante";
+import { NovaProveedor } from "../entities/novaProveedor";
+import { NovaCompra } from "../entities/novaCompra";
+import { NovaDetalleCompra } from "../entities/novaDetalleCompra";
+import { NovaMovimientoInventario } from "../entities/novaMovimientoInventario";
+import { NovaAlmacen } from "../entities/novaAlmacen";
+import { NovaInventario } from "../entities/novaInventario";
+import { NovaVenta } from "../entities/novaVenta";
+import { NovaDetalleVenta } from "../entities/novaDetalleVenta";
+import { NovaPago } from "../entities/novaPago";
 
 dotenv.config();
 
@@ -30,6 +39,15 @@ export const AppDataSource = new DataSource({
         NovaCliente,
         NovaCategoria,
         NovaProducto,
-        NovaVariante
+        NovaVariante,
+        NovaProveedor,
+        NovaCompra,
+        NovaDetalleCompra,
+        NovaMovimientoInventario,
+        NovaAlmacen,
+        NovaInventario,
+        NovaVenta,
+        NovaDetalleVenta,
+        NovaPago
     ]
 });

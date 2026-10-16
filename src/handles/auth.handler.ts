@@ -23,8 +23,12 @@ function buildMenu(permisos: string[]) {
     const MENU_ITEMS = [
         { clave: "usuarios",  etiqueta: "Usuarios",         ruta: "/usuarios",  permiso: "USUARIOS_GESTIONAR" },
         { clave: "roles",     etiqueta: "Roles y permisos",  ruta: "/roles",     permiso: "ROLES_GESTIONAR" },
-        { clave: "clientes",  etiqueta: "Clientes",          ruta: "/clientes",  permiso: "CLIENTES_GESTIONAR" },
-        { clave: "productos", etiqueta: "Productos",          ruta: "/productos", permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "clientes",    etiqueta: "Clientes",          ruta: "/clientes",    permiso: "CLIENTES_GESTIONAR" },
+        { clave: "productos",   etiqueta: "Productos",         ruta: "/productos",   permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "proveedores", etiqueta: "Proveedores",       ruta: "/proveedores", permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "compras",     etiqueta: "Compras",           ruta: "/compras",     permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "inventario",  etiqueta: "Inventario",        ruta: "/inventario",  permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "ventas",      etiqueta: "Ventas",            ruta: "/ventas",      permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
     ];
 
     return MENU_ITEMS

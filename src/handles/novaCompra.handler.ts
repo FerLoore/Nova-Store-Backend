@@ -6,12 +6,14 @@ import { NovaMovimientoInventario } from "../entities/novaMovimientoInventario";
 import { NovaProveedor } from "../entities/novaProveedor";
 import { NovaVariante } from "../entities/novaVariante";
 import { NovaAlmacen } from "../entities/novaAlmacen";
+import { NovaInventario } from "../entities/novaInventario";
 import { parseIntId, round2 } from "../utils/validation";
 
 const compraRepo = () => AppDataSource.getRepository(NovaCompra);
 const proveedorRepo = () => AppDataSource.getRepository(NovaProveedor);
 const varianteRepo = () => AppDataSource.getRepository(NovaVariante);
 const almacenRepo = () => AppDataSource.getRepository(NovaAlmacen);
+const inventarioRepo = () => AppDataSource.getRepository(NovaInventario);
 
 // GET /nova-compra — Listar todas las compras
 export const getCompras = async (_req: Request, res: Response): Promise<void> => {
@@ -237,23 +239,32 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
         }
 
         // Determinar almacén destino (por parámetro o buscar el primer almacén disponible)
-        let almacenId = parseIntId(req.body.almacen_id ?? req.body.ALM_ALMACEN);
-        if (!almacenId) {
-            const primerAlmacen = await almacenRepo().findOne({
-                order: { almacen_id: "ASC" }
-            });
-            almacenId = primerAlmacen ? primerAlmacen.almacen_id : 1;
+        let almacenId = parseIntId(req.body?.almacen_id ?? req.body?.ALM_ALMACEN);
+        let almacenObj: NovaAlmacen | null = null;
+        if (almacenId) {
+            almacenObj = await almacenRepo().findOne({ where: { almacen_id: almacenId } });
         }
+        if (!almacenObj) {
+            almacenObj = await almacenRepo().findOne({ order: { almacen_id: "ASC" } });
+            if (!almacenObj) {
+                const nuevoAlm = almacenRepo().create({
+                    almacen_nombre: "Almacén Central",
+                    almacen_ubicacion: "Sede Principal"
+                });
+                almacenObj = await almacenRepo().save(nuevoAlm);
+            }
+        }
+        almacenId = almacenObj.almacen_id;
 
         const usuarioId = req.user?.usuario_id || compra.usuario_id || 1;
 
-        // Transacción atómica: Actualizar estado y registrar movimientos
+        // Transacción atómica: Actualizar estado, registrar movimientos y sincronizar stock
         await AppDataSource.transaction(async (manager) => {
             // 1. Cambiar estado a RECIBIDA
             compra.compra_estado = "RECIBIDA";
             await manager.save(NovaCompra, compra);
 
-            // 2. Por cada detalle de la compra, insertar en NOVA_MOVIMIENTO_INVENTARIO
+            // 2. Por cada detalle de la compra, insertar en NOVA_MOVIMIENTO_INVENTARIO y actualizar NOVA_INVENTARIO
             for (const det of compra.detalles!) {
                 const mov = manager.create(NovaMovimientoInventario, {
                     variante_id: det.variante_id,
@@ -267,6 +278,22 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
                     movimiento_observacion: `Recepción de Orden de Compra #${compra.compra_id}`
                 });
                 await manager.save(NovaMovimientoInventario, mov);
+
+                // 3. Actualizar o insertar en NOVA_INVENTARIO
+                let inv = await manager.findOne(NovaInventario, {
+                    where: { variante_id: det.variante_id, almacen_id: almacenId! }
+                });
+                if (inv) {
+                    inv.inventario_cantidad = Number(inv.inventario_cantidad || 0) + Number(det.detalle_cantidad);
+                    await manager.save(NovaInventario, inv);
+                } else {
+                    inv = manager.create(NovaInventario, {
+                        variante_id: det.variante_id,
+                        almacen_id: almacenId!,
+                        inventario_cantidad: Number(det.detalle_cantidad)
+                    });
+                    await manager.save(NovaInventario, inv);
+                }
             }
         });
 
@@ -289,9 +316,12 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
             message: `Compra #${id} recibida exitosamente. Se registraron los movimientos de entrada al inventario.`,
             compra: compraActualizada
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("ERROR RECIBIENDO COMPRA:", error);
-        res.status(500).json({ message: "Error al recibir la compra y registrar movimientos de inventario" });
+        res.status(500).json({ 
+            message: "Error al recibir la compra y registrar movimientos de inventario",
+            error: error?.message || String(error)
+        });
     }
 };
 

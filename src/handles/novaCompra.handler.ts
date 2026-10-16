@@ -245,7 +245,8 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
             almacenObj = await almacenRepo().findOne({ where: { almacen_id: almacenId } });
         }
         if (!almacenObj) {
-            almacenObj = await almacenRepo().findOne({ order: { almacen_id: "ASC" } });
+            const primerAlmList = await almacenRepo().find({ order: { almacen_id: "ASC" }, take: 1 });
+            almacenObj = primerAlmList[0] || null;
             if (!almacenObj) {
                 const nuevoAlm = almacenRepo().create({
                     almacen_nombre: "Almacén Central",

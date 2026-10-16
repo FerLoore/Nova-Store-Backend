@@ -123,21 +123,22 @@ export const crearVenta = async (req: Request, res: Response): Promise<void> => 
         }
 
         // Determinar almacén de salida
-        let almacenId = parseIntId(req.body.almacen_id ?? req.body.ALM_ALMACEN);
-        let almacenObj: NovaAlmacen | null = null;
-        if (almacenId) {
-            almacenObj = await almacenRepo().findOne({ where: { almacen_id: almacenId } });
+        let defaultAlmacenId = parseIntId(req.body.almacen_id ?? req.body.ALM_ALMACEN);
+        let defaultAlmacenObj: NovaAlmacen | null = null;
+        if (defaultAlmacenId) {
+            defaultAlmacenObj = await almacenRepo().findOne({ where: { almacen_id: defaultAlmacenId } });
         }
-        if (!almacenObj) {
-            almacenObj = await almacenRepo().findOne({ order: { almacen_id: "ASC" } });
-            if (!almacenObj) {
-                almacenObj = await almacenRepo().save(almacenRepo().create({
+        if (!defaultAlmacenObj) {
+            const primerAlmList = await almacenRepo().find({ order: { almacen_id: "ASC" }, take: 1 });
+            defaultAlmacenObj = primerAlmList[0] || null;
+            if (!defaultAlmacenObj) {
+                defaultAlmacenObj = await almacenRepo().save(almacenRepo().create({
                     almacen_nombre: "Almacén Central",
                     almacen_ubicacion: "Sede Principal"
                 }));
             }
         }
-        almacenId = almacenObj.almacen_id;
+        defaultAlmacenId = defaultAlmacenObj.almacen_id;
 
         const usuarioId = req.user?.usuario_id || 1;
 
@@ -149,6 +150,7 @@ export const crearVenta = async (req: Request, res: Response): Promise<void> => 
             detalle_cantidad: number;
             detalle_precio_unitario: number;
             detalle_subtotal: number;
+            almacen_id: number;
         }[] = [];
 
         let totalVenta = 0;
@@ -176,10 +178,25 @@ export const crearVenta = async (req: Request, res: Response): Promise<void> => 
                 return;
             }
 
-            // Validar existencia de stock en NOVA_INVENTARIO para esta variante y almacén
-            const stockRow = await inventarioRepo().findOne({
-                where: { variante_id: vId, almacen_id: almacenId }
+            // Validar existencia de stock en NOVA_INVENTARIO
+            let itemAlmacenId = defaultAlmacenId!;
+            let stockRow = await inventarioRepo().findOne({
+                where: { variante_id: vId, almacen_id: itemAlmacenId }
             });
+
+            // Si no hay suficiente stock en el almacén por defecto pero no se especificó un almacén fijo en la solicitud, buscar en qué almacén hay existencias
+            if ((!stockRow || Number(stockRow.inventario_cantidad || 0) < cant) && !req.body.almacen_id && !req.body.ALM_ALMACEN) {
+                const anyInvList = await inventarioRepo().find({
+                    where: { variante_id: vId },
+                    order: { inventario_cantidad: "DESC" },
+                    take: 1
+                });
+                if (anyInvList.length > 0 && Number(anyInvList[0].inventario_cantidad || 0) >= cant) {
+                    stockRow = anyInvList[0];
+                    itemAlmacenId = stockRow.almacen_id;
+                }
+            }
+
             const stockDisponible = stockRow ? Number(stockRow.inventario_cantidad || 0) : 0;
 
             if (stockDisponible < cant) {
@@ -209,7 +226,8 @@ export const crearVenta = async (req: Request, res: Response): Promise<void> => 
                 producto_nombre: variante.producto?.producto_nombre ?? "Producto",
                 detalle_cantidad: cant,
                 detalle_precio_unitario: round2(precio),
-                detalle_subtotal: subtotal
+                detalle_subtotal: subtotal,
+                almacen_id: itemAlmacenId
             });
         }
 
@@ -253,7 +271,7 @@ export const crearVenta = async (req: Request, res: Response): Promise<void> => 
             for (const item of itemsParsed) {
                 const mov = manager.create(NovaMovimientoInventario, {
                     variante_id: item.variante_id,
-                    almacen_id: almacenId!,
+                    almacen_id: item.almacen_id,
                     movimiento_tipo: "SALIDA",
                     movimiento_cantidad: item.detalle_cantidad,
                     movimiento_tipo_documento: "VENTA",

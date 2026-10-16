@@ -7,6 +7,9 @@ export class NovaVariante {
     @PrimaryGeneratedColumn({ name: "VAR_VARIANTE" })
     variante_id!: number;
 
+    @Column({ name: "PRODU_PRODUCTO", type: "number", nullable: true })
+    producto_id?: number;
+
     @ManyToOne(() => NovaProducto, (p) => p.variantes)
     @JoinColumn({ name: "PRODU_PRODUCTO" })
     producto!: NovaProducto;

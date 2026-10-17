@@ -267,4 +267,3 @@ export const getPublicRoles = async (_req: Request, res: Response): Promise<void
         res.status(500).json({ message: "Error obteniendo roles" });
     }
 };
-

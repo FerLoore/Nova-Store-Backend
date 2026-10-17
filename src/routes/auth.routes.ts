@@ -17,4 +17,3 @@ router.get("/roles", getPublicRoles);
 router.get("/me", authenticate, me);
 
 export default router;
-

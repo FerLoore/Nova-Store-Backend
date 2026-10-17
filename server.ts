@@ -7,8 +7,25 @@ import cors from "cors";
 const app = express()
 
 //Cors
+const allowedOrigins = [
+    process.env.FRONTEND_SERVICE,
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+].filter(Boolean) as string[];
+
 app.use(cors({
-    origin: process.env.FRONTEND_SERVICE  // puerto de Vite
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Bloqueado por CORS: " + origin));
+        }
+    },
+    credentials: true
 }));
 
 

@@ -1,18 +1,19 @@
 import { Router } from "express";
-import { register, login, me, getRolesPublicos } from "../handles/auth.handler";
+import { login, me, register, getPublicRoles } from "../handles/auth.handler";
+import { authenticate } from "../middlewares/auth";
 
 const router = Router();
 
-// POST /auth/register
-router.post("/register", register);
-
-// POST /auth/login
+// POST /auth/login — público
 router.post("/login", login);
 
-// GET  /auth/me
-router.get("/me", me);
+// POST /auth/register — público
+router.post("/register", register);
 
-// GET  /auth/roles
-router.get("/roles", getRolesPublicos);
+// GET /auth/roles — público (roles disponibles para registro)
+router.get("/roles", getPublicRoles);
+
+// GET /auth/me — requiere token
+router.get("/me", authenticate, me);
 
 export default router;

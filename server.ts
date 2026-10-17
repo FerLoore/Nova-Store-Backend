@@ -1,40 +1,54 @@
-//server.ts es el archivo donde se configura el servidor, 
-// se conecta a la base de datos y se define el middleware para leer los datos del formulario
-import express from 'express'
-import router from './router'//conectar a la base de datos
+import express, { Request, Response, NextFunction } from "express";
+import helmet from "helmet";
 import cors from "cors";
+import router from "./router";
 
-const app = express()
+const app = express();
 
-//Cors
-const allowedOrigins = [
-    process.env.FRONTEND_SERVICE,
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://127.0.0.1:5175",
-].filter(Boolean) as string[];
+// Seguridad
+app.use(helmet());
 
+// CORS: acepta múltiples orígenes o usa localhost por defecto en desarrollo
+const rawOrigins = process.env.FRONTEND_SERVICE;
+let corsOrigin: any = ["http://localhost:5173", "http://localhost:5174"];
+if (rawOrigins && rawOrigins !== "null" && rawOrigins.trim() !== "") {
+    if (rawOrigins === "*") {
+        corsOrigin = true;
+    } else {
+        const origins = rawOrigins.split(",").map((o) => o.trim()).filter(Boolean);
+        corsOrigin = origins.length === 1 ? origins[0] : origins;
+    }
+}
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error("Bloqueado por CORS: " + origin));
-        }
-    },
-    credentials: true
+    origin: corsOrigin,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
+// Parseo de body
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-//leer datos de forumalario
-app.use(express.json({ limit: '50mb' })) // Aumentado el límite para soportar base64 grandes de reportes
-app.use(express.urlencoded({ limit: '50mb', extended: true }))
-app.use('/reports', express.static('public/reports'))
-app.use('/', router)
+// Archivos estáticos
+app.use("/reports", express.static("public/reports"));
 
+// Rutas
+app.use("/", router);
 
+// 404
+app.use((_req: Request, res: Response) => {
+    res.status(404).json({ message: "Ruta no encontrada" });
+});
 
-export default app
+// Manejador de errores global
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    if (err.type === "entity.parse.failed") {
+        res.status(400).json({ message: "El cuerpo de la solicitud no es un JSON válido" });
+        return;
+    }
+    console.error("ERROR NO CONTROLADO:", err);
+    res.status(500).json({ message: "Error interno del servidor" });
+});
+
+export default app;

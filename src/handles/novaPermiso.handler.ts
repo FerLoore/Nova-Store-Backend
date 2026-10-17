@@ -1,86 +1,76 @@
 import { Request, Response } from "express";
+import { In } from "typeorm";
 import { AppDataSource } from "../config/data-source";
+import { NovaPermiso } from "../entities/novaPermiso";
+import { NovaRol } from "../entities/novaRol";
+import { parseIntId } from "../utils/validation";
 
-// GET /nova-permiso - Obtener todos los permisos del sistema
-export const getPermisos = async (_req: Request, res: Response) => {
+const permisoRepo = () => AppDataSource.getRepository(NovaPermiso);
+const rolRepo = () => AppDataSource.getRepository(NovaRol);
+
+// GET /nova-permiso — catálogo completo
+export const getPermisos = async (req: Request, res: Response): Promise<void> => {
     try {
-        const rows = await AppDataSource.query(
-            `SELECT PERM_PERMISO AS "permiso_id",
-                    PERM_CODIGO AS "permiso_codigo",
-                    PERM_DESCRIPCION AS "permiso_descripcion"
-             FROM NOVA_PERMISO
-             ORDER BY PERM_PERMISO ASC`
-        );
-        return res.json(rows);
+        const permisos = await permisoRepo().find({ order: { permiso_codigo: "ASC" } });
+        res.json(permisos);
     } catch (error) {
         console.error("ERROR OBTENIENDO PERMISOS:", error);
-        return res.status(500).json({ message: "Error al obtener permisos" });
+        res.status(500).json({ message: "Error obteniendo permisos" });
     }
 };
 
-// GET /nova-permiso/rol/:rolId - Obtener permisos de un rol específico
-export const getPermisosByRol = async (req: Request, res: Response) => {
+// GET /nova-permiso/rol/:id — permisos del rol
+export const getPermisosByRol = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { rolId } = req.params;
-        const rows = await AppDataSource.query(
-            `SELECT p.PERM_PERMISO AS "permiso_id",
-                    p.PERM_CODIGO AS "permiso_codigo",
-                    p.PERM_DESCRIPCION AS "permiso_descripcion"
-             FROM NOVA_ROL_PERMISO rp
-             JOIN NOVA_PERMISO p ON rp.PERM_PERMISO = p.PERM_PERMISO
-             WHERE rp.ROL_ROL = :1
-             ORDER BY p.PERM_PERMISO ASC`,
-            [Number(rolId)]
-        );
-        return res.json(rows);
+        const id = parseIntId(req.params.id);
+        if (!id) { res.status(400).json({ message: "ID de rol inválido" }); return; }
+
+        const rol = await rolRepo().findOne({
+            where: { rol_id: id },
+            relations: { permisos: true }
+        });
+        if (!rol) { res.status(404).json({ message: "Rol no encontrado" }); return; }
+
+        res.json(rol.permisos ?? []);
     } catch (error) {
         console.error("ERROR OBTENIENDO PERMISOS DEL ROL:", error);
-        return res.status(500).json({ message: "Error al obtener permisos del rol" });
+        res.status(500).json({ message: "Error obteniendo permisos del rol" });
     }
 };
 
-// PUT /nova-permiso/rol/:rolId - Asignar múltiples permisos a un rol
-export const setPermisosRol = async (req: Request, res: Response) => {
-    const queryRunner = AppDataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
+// PUT /nova-permiso/rol/:id — reemplaza permisos del rol
+export const setPermisosRol = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { rolId } = req.params;
+        const id = parseIntId(req.params.id);
+        if (!id) { res.status(400).json({ message: "ID de rol inválido" }); return; }
+
         const { permiso_ids } = req.body;
-
         if (!Array.isArray(permiso_ids)) {
-            return res.status(400).json({ message: "El campo permiso_ids debe ser un arreglo de IDs" });
+            res.status(400).json({ message: "permiso_ids debe ser un arreglo de números" });
+            return;
         }
 
-        const numericRolId = Number(rolId);
+        const ids: number[] = permiso_ids.map(Number).filter((n) => Number.isInteger(n) && n > 0);
 
-        // 1. Eliminar asignaciones previas del rol
-        await queryRunner.query(
-            `DELETE FROM NOVA_ROL_PERMISO WHERE ROL_ROL = :1`,
-            [numericRolId]
-        );
-
-        // 2. Insertar cada nuevo permiso asignado
-        for (const permId of permiso_ids) {
-            await queryRunner.query(
-                `INSERT INTO NOVA_ROL_PERMISO (ROL_ROL, PERM_PERMISO) VALUES (:1, :2)`,
-                [numericRolId, Number(permId)]
-            );
+        // Validar que todos los permisos existan
+        const permisos = await permisoRepo().findBy({ permiso_id: In(ids) });
+        if (permisos.length !== ids.length) {
+            res.status(400).json({ message: "Uno o más permisos no existen" });
+            return;
         }
 
-        await queryRunner.commitTransaction();
-
-        return res.json({
-            message: "Permisos actualizados exitosamente",
-            rol_id: numericRolId,
-            permisos_asignados: permiso_ids.length
+        const rol = await rolRepo().findOne({
+            where: { rol_id: id },
+            relations: { permisos: true }
         });
+        if (!rol) { res.status(404).json({ message: "Rol no encontrado" }); return; }
+
+        rol.permisos = permisos;
+        await rolRepo().save(rol);
+
+        res.json({ ok: true, message: "Permisos del rol actualizados", permisos });
     } catch (error) {
-        await queryRunner.rollbackTransaction();
-        console.error("ERROR ASIGNANDO PERMISOS AL ROL:", error);
-        return res.status(500).json({ message: "Error al actualizar permisos del rol" });
-    } finally {
-        await queryRunner.release();
+        console.error("ERROR ACTUALIZANDO PERMISOS DEL ROL:", error);
+        res.status(500).json({ message: "Error actualizando permisos del rol" });
     }
 };

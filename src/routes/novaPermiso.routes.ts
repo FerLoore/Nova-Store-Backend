@@ -3,13 +3,13 @@ import { getPermisos, getPermisosByRol, setPermisosRol } from "../handles/novaPe
 
 const router = Router();
 
-// GET /nova-permiso - Catálogo general de permisos
+// GET /nova-permiso — catálogo
 router.get("/", getPermisos);
 
-// GET /nova-permiso/rol/:rolId - Permisos asignados a un rol
-router.get("/rol/:rolId", getPermisosByRol);
+// GET /nova-permiso/rol/:id — permisos de un rol
+router.get("/rol/:id", getPermisosByRol);
 
-// PUT /nova-permiso/rol/:rolId - Actualizar permisos asignados a un rol
-router.put("/rol/:rolId", setPermisosRol);
+// PUT /nova-permiso/rol/:id — reemplazar permisos de un rol
+router.put("/rol/:id", setPermisosRol);
 
 export default router;

@@ -113,3 +113,22 @@ export const requirePermissionByMethod = (opts: {
         }
         next();
     };
+
+/** Middleware: requiere que el rol del usuario coincida con alguno de los roles indicados (ej. 'GERENTE', 'ADMIN'). */
+export const requireRole = (...roles: string[]) =>
+    (req: Request, res: Response, next: NextFunction): void => {
+        const userRole = (req.user?.rol_nombre || "").trim().toUpperCase();
+        const isAllowed = roles.some((r) => {
+            const target = r.trim().toUpperCase();
+            return userRole === target || (target === "ADMIN" && userRole.includes("ADMIN"));
+        });
+
+        if (!isAllowed) {
+            res.status(403).json({
+                message: `Acceso restringido. Se requiere rol ${roles.join(" o ")} para realizar esta acción`
+            });
+            return;
+        }
+        next();
+    };
+

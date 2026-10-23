@@ -15,6 +15,7 @@ import novaProveedorRoutes from "./src/routes/novaProveedor.routes";
 import novaCompraRoutes    from "./src/routes/novaCompra.routes";
 import novaInventarioRoutes from "./src/routes/novaInventario.routes";
 import novaVentaRoutes      from "./src/routes/novaVenta.routes";
+import novaPedidoRoutes     from "./src/routes/novaPedido.routes";
 
 const router = Router();
 
@@ -117,5 +118,9 @@ router.use("/nova-venta",
     }),
     novaVentaRoutes
 );
+
+// Módulo de Pedidos (POST /pedidos, PUT /pedidos/:id/aprobar, GET /pedidos)
+router.use("/pedidos", novaPedidoRoutes);
+router.use("/nova-pedido", novaPedidoRoutes);
 
 export default router;

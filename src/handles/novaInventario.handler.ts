@@ -79,20 +79,31 @@ export const getAlertasInventario = async (req: Request, res: Response): Promise
 
         const data = await query.getRawMany();
 
-        const result = data.map((row) => ({
-            producto_nombre:        row.producto_nombre,
-            producto_id:            row.producto_id,
-            variante_id:            row.variante_id,
-            variante_sku:           row.variante_sku,
-            variante_talla:         row.variante_talla,
-            variante_color:         row.variante_color,
-            almacen_nombre:         row.almacen_nombre,
-            almacen_id:             row.almacen_id,
-            inventario_cantidad:    Number(row.inventario_cantidad ?? 0),
-            variante_stock_minimo:  Number(row.variante_stock_minimo ?? 0),
-            inventario_id:          row.inventario_id,
-            diferencia:             Number(row.variante_stock_minimo ?? 0) - Number(row.inventario_cantidad ?? 0)
-        }));
+        const result = data.map((row) => {
+            const stockActual = Number(row.inventario_cantidad ?? 0);
+            const stockMinimo = Number(row.variante_stock_minimo ?? 0);
+            const diferencia = stockMinimo - stockActual;
+
+            return {
+                producto_nombre:        row.producto_nombre,
+                producto_id:            row.producto_id,
+                variante_id:            row.variante_id,
+                variante_sku:           row.variante_sku,
+                variante_talla:         row.variante_talla,
+                variante_color:         row.variante_color,
+                almacen_nombre:         row.almacen_nombre,
+                almacen_id:             row.almacen_id,
+                inventario_cantidad:    stockActual,
+                variante_stock_minimo:  stockMinimo,
+                inventario_id:          row.inventario_id,
+                diferencia:             diferencia,
+                solicitar_orden_compra: true,
+                nivel_alerta:           stockActual === 0 ? "CRITICO_SIN_STOCK" : "STOCK_MINIMO",
+                mensaje:                stockActual === 0
+                    ? `Stock agotado (0 unidades) para "${row.producto_nombre}" (SKU: ${row.variante_sku}). Solicitar orden de compra urgente.`
+                    : `Stock actual (${stockActual}) menor o igual al mínimo (${stockMinimo}) para "${row.producto_nombre}" (SKU: ${row.variante_sku}). Solicitar orden de compra.`
+            };
+        });
 
         res.json(result);
     } catch (error) {

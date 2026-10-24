@@ -6,6 +6,7 @@ import {
     createProducto,
     updateProducto,
     deleteProducto,
+    activarProducto,
     addVariante,
     updateVariante,
     deleteVariante,
@@ -26,6 +27,10 @@ router.delete("/:id/variantes/:varianteId", deleteVariante);
 // Compatibilidad hacia atrás
 router.put("/variante/:id",    updateVariante);
 router.delete("/variante/:id", deleteVariante);
+
+// Activación de producto
+router.patch("/:id/activar", activarProducto);
+router.put("/:id/activar",   activarProducto);
 
 router.get("/",     getProductos);
 router.get("/:id",  getProductoById);

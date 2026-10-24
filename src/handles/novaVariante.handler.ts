@@ -3,10 +3,12 @@ import { Not } from "typeorm";
 import { AppDataSource } from "../config/data-source";
 import { NovaProducto } from "../entities/novaProducto";
 import { NovaVariante } from "../entities/novaVariante";
+import { NovaInventario } from "../entities/novaInventario";
 import { parseIntId, trimOrNull, round2, getOraCode } from "../utils/validation";
 
 const productoRepo = () => AppDataSource.getRepository(NovaProducto);
 const varianteRepo = () => AppDataSource.getRepository(NovaVariante);
+const inventarioRepo = () => AppDataSource.getRepository(NovaInventario);
 
 /**
  * Valida y normaliza los campos de una variante
@@ -245,7 +247,24 @@ export const createVariante = async (req: Request, res: Response): Promise<void>
         });
 
         const saved = await varianteRepo().save(variante);
-        res.status(201).json(saved);
+
+        // Verificar cantidad actual en inventario al dar de alta una nueva variante
+        const invRows = await inventarioRepo().find({ where: { variante_id: saved.variante_id } });
+        const stockActual = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+        const stockMinimo = Number(saved.variante_stock_minimo ?? 0);
+        const esAlerta = stockActual === 0 || stockActual <= stockMinimo;
+
+        res.status(201).json({
+            ...saved,
+            stock_actual: stockActual,
+            alerta_stock: esAlerta,
+            solicitar_orden_compra: esAlerta,
+            mensaje_alerta: esAlerta
+                ? (stockActual === 0
+                    ? `Stock en 0 para la nueva variante "${saved.variante_sku}". Se requiere solicitar una orden de compra urgente.`
+                    : `Stock actual (${stockActual}) menor o igual al stock mínimo (${stockMinimo}) para "${saved.variante_sku}". Se requiere solicitar orden de compra.`)
+                : null
+        });
     } catch (error: any) {
         console.error("ERROR CREANDO VARIANTE:", error);
         if (getOraCode(error) === "ORA-00001") {
@@ -437,7 +456,28 @@ export const updateVariante = async (req: Request, res: Response): Promise<void>
         }
 
         const saved = await varianteRepo().save(variante);
-        res.json(saved);
+
+        // Si la variante está activa, verificar inventario y emitir alerta si stock es 0 o <= mínimo
+        let stockActual = 0;
+        let esAlerta = false;
+        if (saved.variante_activo === 1) {
+            const invRows = await inventarioRepo().find({ where: { variante_id: saved.variante_id } });
+            stockActual = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+            const stockMinimo = Number(saved.variante_stock_minimo ?? 0);
+            esAlerta = stockActual === 0 || stockActual <= stockMinimo;
+        }
+
+        res.json({
+            ...saved,
+            stock_actual: stockActual,
+            alerta_stock: esAlerta,
+            solicitar_orden_compra: esAlerta,
+            mensaje_alerta: esAlerta
+                ? (stockActual === 0
+                    ? `Stock en 0 para la variante activa "${saved.variante_sku}". Se requiere solicitar orden de compra.`
+                    : `Stock actual (${stockActual}) menor o igual al stock mínimo (${saved.variante_stock_minimo}) para "${saved.variante_sku}". Se requiere solicitar orden de compra.`)
+                : null
+        });
     } catch (error: any) {
         console.error("ERROR ACTUALIZANDO VARIANTE:", error);
         if (getOraCode(error) === "ORA-00001") {

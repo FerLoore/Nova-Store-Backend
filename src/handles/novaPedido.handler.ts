@@ -134,7 +134,55 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
 
         const usuarioId = req.user?.usuario_id || 1;
 
-        // Validar cada variante y calcular subtotales
+        // 1. Agrupar y validar cantidades totales solicitadas por cada variante en el pedido
+        const cantidadesPorVariante = new Map<number, number>();
+        for (let i = 0; i < rawDetalles.length; i++) {
+            const item = rawDetalles[i];
+            const vId = parseIntId(item.VAR_VARIANTE ?? item.variante_id);
+            if (!vId) {
+                res.status(400).json({ message: `Detalle[${i}]: El campo VAR_VARIANTE es obligatorio` });
+                return;
+            }
+
+            const cant = Number(item.DETPED_CANTIDAD ?? item.detalle_cantidad ?? item.cantidad);
+            if (!Number.isInteger(cant) || cant <= 0) {
+                res.status(400).json({ message: `Detalle[${i}]: La cantidad (DETPED_CANTIDAD) debe ser un entero positivo` });
+                return;
+            }
+
+            cantidadesPorVariante.set(vId, (cantidadesPorVariante.get(vId) || 0) + cant);
+        }
+
+        // 2. Validación estricta de disponibilidad de stock: comparar cantidad solicitada contra existencias
+        for (const [vId, totalSolicitado] of cantidadesPorVariante.entries()) {
+            const variante = await varianteRepo().findOne({
+                where: { variante_id: vId, variante_activo: 1 },
+                relations: { producto: true }
+            });
+            if (!variante) {
+                res.status(404).json({ message: `La variante ID ${vId} no existe o está inactiva` });
+                return;
+            }
+
+            const invRows = await inventarioRepo().find({ where: { variante_id: vId } });
+            const stockTotal = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+
+            if (stockTotal < totalSolicitado) {
+                const prodNombre = variante.producto?.producto_nombre ?? "Producto";
+                res.status(400).json({
+                    ok: false,
+                    message: `Stock insuficiente para "${prodNombre}" (SKU: ${variante.variante_sku}). Stock disponible: ${stockTotal}, solicitado: ${totalSolicitado}`,
+                    sku: variante.variante_sku,
+                    stock_disponible: stockTotal,
+                    solicitado: totalSolicitado,
+                    error: "STOCK_INSUFICIENTE",
+                    error_tipo: "SIN_INVENTARIO"
+                });
+                return;
+            }
+        }
+
+        // 3. Procesar items y calcular subtotales
         const itemsParsed: {
             variante_id: number;
             variante_sku: string;
@@ -148,41 +196,13 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
 
         for (let i = 0; i < rawDetalles.length; i++) {
             const item = rawDetalles[i];
-            const vId = parseIntId(item.VAR_VARIANTE ?? item.variante_id);
-            if (!vId) {
-                res.status(400).json({ message: `Detalle[${i}]: El campo VAR_VARIANTE es obligatorio` });
-                return;
-            }
+            const vId = parseIntId(item.VAR_VARIANTE ?? item.variante_id)!;
+            const cant = Number(item.DETPED_CANTIDAD ?? item.detalle_cantidad ?? item.cantidad);
 
-            const variante = await varianteRepo().findOne({
+            const variante = (await varianteRepo().findOne({
                 where: { variante_id: vId, variante_activo: 1 },
                 relations: { producto: true }
-            });
-            if (!variante) {
-                res.status(404).json({ message: `Detalle[${i}]: La variante ID ${vId} no existe o está inactiva` });
-                return;
-            }
-
-            const cant = Number(item.DETPED_CANTIDAD ?? item.detalle_cantidad ?? item.cantidad);
-            if (!Number.isInteger(cant) || cant <= 0) {
-                res.status(400).json({ message: `Detalle[${i}]: La cantidad (DETPED_CANTIDAD) debe ser un entero positivo` });
-                return;
-            }
-
-            // Validar stock disponible en inventario
-            const invRows = await inventarioRepo().find({ where: { variante_id: vId } });
-            const stockTotal = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
-            if (stockTotal < cant) {
-                const prodNombre = variante.producto?.producto_nombre ?? "Producto";
-                res.status(400).json({
-                    message: `Stock insuficiente para "${prodNombre}" (SKU: ${variante.variante_sku}). Stock disponible: ${stockTotal}, solicitado: ${cant}`,
-                    sku: variante.variante_sku,
-                    stock_disponible: stockTotal,
-                    solicitado: cant,
-                    error_tipo: "SIN_INVENTARIO"
-                });
-                return;
-            }
+            }))!;
 
             // Precio unitario: usar el especificado o el precio de venta configurado en la variante
             let precio = item.DETPED_PRECIO_UNITARIO ?? item.detalle_precio_unitario ?? item.precio_unitario ?? variante.variante_precio_venta;
@@ -222,6 +242,15 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
 
         // Transacción para guardar pedido y sus detalles
         const savedPedido = await AppDataSource.transaction(async (manager) => {
+            // Verificación atómica dentro de la transacción: bloquear si el stock disponible cambió
+            for (const [vId, totalSolicitado] of cantidadesPorVariante.entries()) {
+                const invRows = await manager.find(NovaInventario, { where: { variante_id: vId } });
+                const stockTotal = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+                if (stockTotal < totalSolicitado) {
+                    throw new Error(`STOCK_INSUFICIENTE: Stock insuficiente para variante #${vId}. Disponible: ${stockTotal}, solicitado: ${totalSolicitado}`);
+                }
+            }
+
             const nuevoPedido = manager.create(NovaPedido, {
                 cliente_id: clienteId,
                 usuario_id: usuarioId,
@@ -276,13 +305,22 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
         });
 
         res.status(201).json({
+            ok: true,
             message: estadoPedido === "ESPERANDO_APROBACION"
                 ? "Pedido creado en espera de aprobación por descuento aplicado"
                 : "Pedido creado y aprobado exitosamente",
             pedido: fullPedido
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("ERROR CREANDO PEDIDO:", error);
+        if (error?.message?.startsWith("STOCK_INSUFICIENTE")) {
+            res.status(400).json({
+                ok: false,
+                message: error.message.replace("STOCK_INSUFICIENTE: ", ""),
+                error_tipo: "SIN_INVENTARIO"
+            });
+            return;
+        }
         res.status(500).json({ message: "Error al registrar el pedido" });
     }
 };
@@ -325,6 +363,29 @@ export const aprobarPedido = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
+        // Validar que exista stock suficiente para todas las líneas antes de confirmar la aprobación
+        for (const det of pedido.detalles || []) {
+            const vId = Number(det.variante_id);
+            const cant = Number(det.detalle_cantidad);
+            const invRows = await inventarioRepo().find({ where: { variante_id: vId } });
+            const stockTotal = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+
+            if (stockTotal < cant) {
+                const sku = det.variante?.variante_sku || `VAR#${vId}`;
+                const prodNombre = det.variante?.producto?.producto_nombre || "Producto";
+                res.status(400).json({
+                    ok: false,
+                    message: `No se puede aprobar el pedido: stock insuficiente para "${prodNombre}" (SKU: ${sku}). Stock disponible: ${stockTotal}, solicitado: ${cant}`,
+                    sku,
+                    stock_disponible: stockTotal,
+                    solicitado: cant,
+                    error: "STOCK_INSUFICIENTE",
+                    error_tipo: "SIN_INVENTARIO"
+                });
+                return;
+            }
+        }
+
         // Cambiar estado a APROBADO
         const estadoAntes = pedido.pedido_estado;
         pedido.pedido_estado = "APROBADO";
@@ -344,6 +405,7 @@ export const aprobarPedido = async (req: Request, res: Response): Promise<void> 
         await auditoriaRepo.save(audi);
 
         res.json({
+            ok: true,
             message: `Pedido #${pedido.pedido_id} aprobado con éxito`,
             pedido: pedidoActualizado
         });

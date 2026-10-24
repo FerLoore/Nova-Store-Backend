@@ -107,7 +107,24 @@ export const getVariantes = async (req: Request, res: Response): Promise<void> =
             }
 
             const variantes = await qb.orderBy("p.producto_nombre", "ASC").addOrderBy("v.variante_sku", "ASC").getMany();
-            res.json(variantes);
+
+            // Consultar existencias en NOVA_INVENTARIO para informar stock_disponible
+            const invList = await AppDataSource.query(`
+                SELECT VAR_VARIANTE AS "variante_id", SUM(INV_CANTIDAD) AS "total_stock"
+                FROM NOVA_INVENTARIO
+                GROUP BY VAR_VARIANTE
+            `).catch(() => []);
+            const stockMap: Record<number, number> = {};
+            for (const row of invList) {
+                stockMap[Number(row.variante_id)] = Number(row.total_stock || 0);
+            }
+
+            const result = variantes.map(v => ({
+                ...v,
+                stock_disponible: stockMap[v.variante_id] ?? 0
+            }));
+
+            res.json(result);
             return;
         }
 

@@ -5,11 +5,13 @@ import { NovaDetallePedido } from "../entities/novaDetallePedido";
 import { NovaCliente } from "../entities/novaCliente";
 import { NovaVariante } from "../entities/novaVariante";
 import { NovaAuditoria } from "../entities/novaAuditoria";
+import { NovaInventario } from "../entities/novaInventario";
 import { parseIntId, round2 } from "../utils/validation";
 
 const pedidoRepo = () => AppDataSource.getRepository(NovaPedido);
 const clienteRepo = () => AppDataSource.getRepository(NovaCliente);
 const varianteRepo = () => AppDataSource.getRepository(NovaVariante);
+const inventarioRepo = () => AppDataSource.getRepository(NovaInventario);
 
 /**
  * GET /pedidos — Listar pedidos con opción de filtrar por fecha, cliente y estado
@@ -167,6 +169,21 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
                 return;
             }
 
+            // Validar stock disponible en inventario
+            const invRows = await inventarioRepo().find({ where: { variante_id: vId } });
+            const stockTotal = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+            if (stockTotal < cant) {
+                const prodNombre = variante.producto?.producto_nombre ?? "Producto";
+                res.status(400).json({
+                    message: `Stock insuficiente para "${prodNombre}" (SKU: ${variante.variante_sku}). Stock disponible: ${stockTotal}, solicitado: ${cant}`,
+                    sku: variante.variante_sku,
+                    stock_disponible: stockTotal,
+                    solicitado: cant,
+                    error_tipo: "SIN_INVENTARIO"
+                });
+                return;
+            }
+
             // Precio unitario: usar el especificado o el precio de venta configurado en la variante
             let precio = item.DETPED_PRECIO_UNITARIO ?? item.detalle_precio_unitario ?? item.precio_unitario ?? variante.variante_precio_venta;
             precio = Number(precio);
@@ -231,7 +248,7 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
             if (descuento > 0) {
                 const audi = manager.create(NovaAuditoria, {
                     auditoria_tabla: "NOVA_PEDIDO",
-                    auditoria_accion: "DESCUENTO",
+                    auditoria_accion: "UPDATE",
                     auditoria_campo: "PED_DESCUENTO",
                     auditoria_valor_antes: "0.00",
                     auditoria_valor_despues: round2(descuento).toString(),
@@ -317,7 +334,7 @@ export const aprobarPedido = async (req: Request, res: Response): Promise<void> 
         const auditoriaRepo = AppDataSource.getRepository(NovaAuditoria);
         const audi = auditoriaRepo.create({
             auditoria_tabla: "NOVA_PEDIDO",
-            auditoria_accion: "APROBAR",
+            auditoria_accion: "UPDATE",
             auditoria_campo: "PED_ESTADO",
             auditoria_valor_antes: estadoAntes,
             auditoria_valor_despues: "APROBADO",

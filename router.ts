@@ -94,6 +94,14 @@ router.use("/nova-proveedor",
     }),
     novaProveedorRoutes
 );
+router.use("/proveedores",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaProveedorRoutes
+);
 
 router.use("/nova-compra",
     authenticate,
@@ -103,8 +111,24 @@ router.use("/nova-compra",
     }),
     novaCompraRoutes
 );
+router.use("/compras",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaCompraRoutes
+);
 
 router.use("/nova-inventario",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaInventarioRoutes
+);
+router.use("/inventario",
     authenticate,
     requirePermissionByMethod({
         lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],

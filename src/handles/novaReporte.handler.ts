@@ -40,16 +40,16 @@ export const getReporteTopProductos = async (_req: Request, res: Response): Prom
         const rows = await AppDataSource.query(`
             SELECT * FROM (
                 SELECT 
-                    p.PRO_PRODUCTO AS "producto_id",
-                    p.PRO_NOMBRE AS "producto_nombre",
+                    p.PRODU_PRODUCTO AS "producto_id",
+                    p.PRODU_NOMBRE AS "producto_nombre",
                     SUM(dv.DETVEN_CANTIDAD) AS "total_cantidad",
                     SUM(dv.DETVEN_SUBTOTAL) AS "total_recaudado"
                 FROM NOVA_DETALLE_VENTA dv
                 JOIN NOVA_VARIANTE v ON dv.VAR_VARIANTE = v.VAR_VARIANTE
-                JOIN NOVA_PRODUCTO p ON v.PRO_PRODUCTO = p.PRO_PRODUCTO
+                JOIN NOVA_PRODUCTO p ON v.PRODU_PRODUCTO = p.PRODU_PRODUCTO
                 JOIN NOVA_VENTA vent ON dv.VENT_VENTA = vent.VENT_VENTA
                 WHERE vent.VENT_ESTADO = 'COMPLETADA'
-                GROUP BY p.PRO_PRODUCTO, p.PRO_NOMBRE
+                GROUP BY p.PRODU_PRODUCTO, p.PRODU_NOMBRE
                 ORDER BY SUM(dv.DETVEN_CANTIDAD) DESC
             )
             WHERE ROWNUM <= 10

@@ -279,22 +279,7 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
                     movimiento_observacion: `Recepción de Orden de Compra #${compra.compra_id}`
                 });
                 await manager.save(NovaMovimientoInventario, mov);
-
-                // 3. Actualizar o insertar en NOVA_INVENTARIO
-                let inv = await manager.findOne(NovaInventario, {
-                    where: { variante_id: det.variante_id, almacen_id: almacenId! }
-                });
-                if (inv) {
-                    inv.inventario_cantidad = Number(inv.inventario_cantidad || 0) + Number(det.detalle_cantidad);
-                    await manager.save(NovaInventario, inv);
-                } else {
-                    inv = manager.create(NovaInventario, {
-                        variante_id: det.variante_id,
-                        almacen_id: almacenId!,
-                        inventario_cantidad: Number(det.detalle_cantidad)
-                    });
-                    await manager.save(NovaInventario, inv);
-                }
+                // El trigger TRG_MOVI_INVENTARIO en Oracle actualiza automáticamente NOVA_INVENTARIO al insertar el movimiento
             }
         });
 

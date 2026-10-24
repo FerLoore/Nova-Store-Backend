@@ -25,7 +25,13 @@ export const facturarPedido = async (req: Request, res: Response): Promise<void>
     }
 
     // Validar método de pago
-    const rawMetodo = String(req.body.pago_metodo ?? req.body.PAG_METODO ?? "EFECTIVO")
+    const rawMetodo = String(
+        req.body?.pago_metodo ??
+        req.body?.PAG_METODO ??
+        req.body?.metodo_pago ??
+        req.body?.metodo ??
+        "EFECTIVO"
+    )
         .trim()
         .toUpperCase();
     if (!METODOS_PAGO_VALIDOS.includes(rawMetodo as any)) {

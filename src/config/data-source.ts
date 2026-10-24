@@ -21,6 +21,7 @@ import { NovaDetalleVenta } from "../entities/novaDetalleVenta";
 import { NovaPago } from "../entities/novaPago";
 import { NovaPedido } from "../entities/novaPedido";
 import { NovaDetallePedido } from "../entities/novaDetallePedido";
+import { NovaAuditoria } from "../entities/novaAuditoria";
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ export const AppDataSource = new DataSource({
         NovaDetalleVenta,
         NovaPago,
         NovaPedido,
-        NovaDetallePedido
+        NovaDetallePedido,
+        NovaAuditoria
     ]
 });

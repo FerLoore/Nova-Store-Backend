@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requirePermission, requirePermissionByMethod } from "./src/middlewares/auth";
+import { authenticate, requirePermission, requirePermissionByMethod, requireRole } from "./src/middlewares/auth";
 
 // Rutas
 import authRoutes       from "./src/routes/auth.routes";
@@ -17,6 +17,8 @@ import novaInventarioRoutes from "./src/routes/novaInventario.routes";
 import novaVentaRoutes        from "./src/routes/novaVenta.routes";
 import novaPedidoRoutes       from "./src/routes/novaPedido.routes";
 import novaFacturacionRoutes  from "./src/routes/novaFacturacion.routes";
+import novaReporteRoutes      from "./src/routes/novaReporte.routes";
+import novaAuditoriaRoutes    from "./src/routes/novaAuditoria.routes";
 
 const router = Router();
 
@@ -132,6 +134,24 @@ router.use("/ventas",
         escritura: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"]
     }),
     novaFacturacionRoutes
+);
+
+// Módulo de Reportes
+router.use("/reportes",
+    authenticate,
+    novaReporteRoutes
+);
+
+// Módulo de Auditoría (Solo Admin)
+router.use("/auditoria",
+    authenticate,
+    requireRole("ADMIN"),
+    novaAuditoriaRoutes
+);
+router.use("/nova-auditoria",
+    authenticate,
+    requireRole("ADMIN"),
+    novaAuditoriaRoutes
 );
 
 export default router;

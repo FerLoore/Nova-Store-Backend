@@ -4,6 +4,7 @@ import { NovaPedido } from "../entities/novaPedido";
 import { NovaDetallePedido } from "../entities/novaDetallePedido";
 import { NovaCliente } from "../entities/novaCliente";
 import { NovaVariante } from "../entities/novaVariante";
+import { NovaAuditoria } from "../entities/novaAuditoria";
 import { parseIntId, round2 } from "../utils/validation";
 
 const pedidoRepo = () => AppDataSource.getRepository(NovaPedido);
@@ -11,35 +12,38 @@ const clienteRepo = () => AppDataSource.getRepository(NovaCliente);
 const varianteRepo = () => AppDataSource.getRepository(NovaVariante);
 
 /**
- * GET /pedidos — Listar pedidos con opción de filtrar por estado
+ * GET /pedidos — Listar pedidos con opción de filtrar por fecha, cliente y estado
  */
 export const getPedidos = async (req: Request, res: Response): Promise<void> => {
     try {
         const estado = req.query.estado ? String(req.query.estado).trim().toUpperCase() : null;
-        const clienteId = req.query.cliente_id ? parseIntId(req.query.cliente_id as string) : null;
+        const cliente = req.query.cliente ? String(req.query.cliente).trim() : (req.query.cliente_id ? String(req.query.cliente_id).trim() : null);
+        const fecha = req.query.fecha ? String(req.query.fecha).trim() : null;
 
-        const whereClause: any = {};
+        const qb = pedidoRepo().createQueryBuilder("p")
+            .leftJoinAndSelect("p.cliente", "cliente")
+            .leftJoinAndSelect("p.usuario", "usuario")
+            .leftJoinAndSelect("p.detalles", "detalles")
+            .leftJoinAndSelect("detalles.variante", "variante")
+            .leftJoinAndSelect("variante.producto", "producto");
+
         if (estado) {
-            whereClause.pedido_estado = estado;
+            qb.andWhere("p.pedido_estado = :estado", { estado });
         }
-        if (clienteId) {
-            whereClause.cliente_id = clienteId;
+        if (cliente) {
+            if (!isNaN(Number(cliente))) {
+                qb.andWhere("p.cliente_id = :clienteId", { clienteId: Number(cliente) });
+            } else {
+                qb.andWhere("LOWER(cliente.cliente_nombre) LIKE :clienteNombre", { clienteNombre: `%${cliente.toLowerCase()}%` });
+            }
+        }
+        if (fecha) {
+            qb.andWhere("TO_CHAR(p.pedido_fecha, 'YYYY-MM-DD') = :fecha", { fecha });
         }
 
-        const pedidos = await pedidoRepo().find({
-            where: whereClause,
-            relations: {
-                cliente: true,
-                usuario: true,
-                detalles: {
-                    variante: {
-                        producto: true
-                    }
-                }
-            },
-            order: { pedido_id: "DESC" }
-        });
+        qb.orderBy("p.pedido_id", "DESC");
 
+        const pedidos = await qb.getMany();
         res.json(pedidos);
     } catch (error) {
         console.error("ERROR OBTENIENDO PEDIDOS:", error);
@@ -224,6 +228,19 @@ export const crearPedido = async (req: Request, res: Response): Promise<void> =>
 
             await manager.save(NovaDetallePedido, detalleEntities);
 
+            if (descuento > 0) {
+                const audi = manager.create(NovaAuditoria, {
+                    auditoria_tabla: "NOVA_PEDIDO",
+                    auditoria_accion: "DESCUENTO",
+                    auditoria_campo: "PED_DESCUENTO",
+                    auditoria_valor_antes: "0.00",
+                    auditoria_valor_despues: round2(descuento).toString(),
+                    usuario_id: usuarioId,
+                    auditoria_fecha: new Date(),
+                });
+                await manager.save(NovaAuditoria, audi);
+            }
+
             return resultPedido;
         });
 
@@ -292,8 +309,22 @@ export const aprobarPedido = async (req: Request, res: Response): Promise<void> 
         }
 
         // Cambiar estado a APROBADO
+        const estadoAntes = pedido.pedido_estado;
         pedido.pedido_estado = "APROBADO";
         const pedidoActualizado = await pedidoRepo().save(pedido);
+
+        // Registrar en NOVA_AUDITORIA
+        const auditoriaRepo = AppDataSource.getRepository(NovaAuditoria);
+        const audi = auditoriaRepo.create({
+            auditoria_tabla: "NOVA_PEDIDO",
+            auditoria_accion: "APROBAR",
+            auditoria_campo: "PED_ESTADO",
+            auditoria_valor_antes: estadoAntes,
+            auditoria_valor_despues: "APROBADO",
+            usuario_id: req.user?.usuario_id || pedido.usuario_id || 1,
+            auditoria_fecha: new Date(),
+        });
+        await auditoriaRepo.save(audi);
 
         res.json({
             message: `Pedido #${pedido.pedido_id} aprobado con éxito`,

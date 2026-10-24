@@ -19,21 +19,37 @@ const inventarioRepo = () => AppDataSource.getRepository(NovaInventario);
 const METODOS_PAGO_VALIDOS = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"] as const;
 
 // GET /nova-venta — Listar ventas con cliente, usuario, detalles y pagos
-export const getVentas = async (_req: Request, res: Response): Promise<void> => {
+export const getVentas = async (req: Request, res: Response): Promise<void> => {
     try {
-        const ventas = await ventaRepo().find({
-            relations: {
-                cliente: true,
-                usuario: true,
-                detalles: {
-                    variante: {
-                        producto: true
-                    }
-                },
-                pagos: true
-            },
-            order: { venta_id: "DESC" }
-        });
+        const estado = req.query.estado ? String(req.query.estado).trim().toUpperCase() : null;
+        const cliente = req.query.cliente ? String(req.query.cliente).trim() : (req.query.cliente_id ? String(req.query.cliente_id).trim() : null);
+        const fecha = req.query.fecha ? String(req.query.fecha).trim() : null;
+
+        const qb = ventaRepo().createQueryBuilder("v")
+            .leftJoinAndSelect("v.cliente", "cliente")
+            .leftJoinAndSelect("v.usuario", "usuario")
+            .leftJoinAndSelect("v.detalles", "detalles")
+            .leftJoinAndSelect("detalles.variante", "variante")
+            .leftJoinAndSelect("variante.producto", "producto")
+            .leftJoinAndSelect("v.pagos", "pagos");
+
+        if (estado) {
+            qb.andWhere("v.venta_estado = :estado", { estado });
+        }
+        if (cliente) {
+            if (!isNaN(Number(cliente))) {
+                qb.andWhere("v.cliente_id = :clienteId", { clienteId: Number(cliente) });
+            } else {
+                qb.andWhere("LOWER(cliente.cliente_nombre) LIKE :clienteNombre", { clienteNombre: `%${cliente.toLowerCase()}%` });
+            }
+        }
+        if (fecha) {
+            qb.andWhere("TO_CHAR(v.venta_fecha, 'YYYY-MM-DD') = :fecha", { fecha });
+        }
+
+        qb.orderBy("v.venta_id", "DESC");
+
+        const ventas = await qb.getMany();
         res.json(ventas);
     } catch (error) {
         console.error("ERROR OBTENIENDO VENTAS:", error);

@@ -14,8 +14,9 @@ import novaVarianteRoutes  from "./src/routes/novaVariante.routes";
 import novaProveedorRoutes from "./src/routes/novaProveedor.routes";
 import novaCompraRoutes    from "./src/routes/novaCompra.routes";
 import novaInventarioRoutes from "./src/routes/novaInventario.routes";
-import novaVentaRoutes      from "./src/routes/novaVenta.routes";
-import novaPedidoRoutes     from "./src/routes/novaPedido.routes";
+import novaVentaRoutes        from "./src/routes/novaVenta.routes";
+import novaPedidoRoutes       from "./src/routes/novaPedido.routes";
+import novaFacturacionRoutes  from "./src/routes/novaFacturacion.routes";
 
 const router = Router();
 
@@ -122,5 +123,15 @@ router.use("/nova-venta",
 // Módulo de Pedidos (POST /pedidos, PUT /pedidos/:id/aprobar, GET /pedidos)
 router.use("/pedidos", novaPedidoRoutes);
 router.use("/nova-pedido", novaPedidoRoutes);
+
+// Módulo de Facturación (POST /ventas/facturar/:idPedido)
+router.use("/ventas",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"]
+    }),
+    novaFacturacionRoutes
+);
 
 export default router;

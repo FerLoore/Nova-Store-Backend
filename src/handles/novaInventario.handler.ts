@@ -11,32 +11,35 @@ import { AppDataSource } from "../config/data-source";
 function getInventarioBaseQuery() {
     return AppDataSource.createQueryBuilder()
         .select([
-            'p.producto_nombre AS "producto_nombre"',
-            'p.producto_id AS "producto_id"',
-            'v.variante_sku AS "variante_sku"',
-            'v.variante_talla AS "variante_talla"',
-            'v.variante_color AS "variante_color"',
-            'v.variante_stock_minimo AS "variante_stock_minimo"',
-            'a.almacen_nombre AS "almacen_nombre"',
-            'a.almacen_id AS "almacen_id"',
-            'inv.inventario_cantidad AS "inventario_cantidad"',
-            'inv.inventario_id AS "inventario_id"'
+            'p.PRODU_NOMBRE AS "producto_nombre"',
+            'p.PRODU_PRODUCTO AS "producto_id"',
+            'v.VAR_VARIANTE AS "variante_id"',
+            'v.VAR_SKU AS "variante_sku"',
+            'v.VAR_TALLA AS "variante_talla"',
+            'v.VAR_COLOR AS "variante_color"',
+            'NVL(v.VAR_STOCK_MINIMO, 0) AS "variante_stock_minimo"',
+            'NVL(a.ALM_NOMBRE, \'Sin Almacén / Sin Stock\') AS "almacen_nombre"',
+            'a.ALM_ALMACEN AS "almacen_id"',
+            'NVL(inv.INV_CANTIDAD, 0) AS "inventario_cantidad"',
+            'inv.INV_INVENTARIO AS "inventario_id"'
         ])
-        .from("NOVA_INVENTARIO", "inv")
-        .innerJoin("NOVA_VARIANTE", "v", "inv.VAR_VARIANTE = v.VAR_VARIANTE")
+        .from("NOVA_VARIANTE", "v")
         .innerJoin("NOVA_PRODUCTO", "p", "v.PRODU_PRODUCTO = p.PRODU_PRODUCTO")
-        .innerJoin("NOVA_ALMACEN", "a", "inv.ALM_ALMACEN = a.ALM_ALMACEN");
+        .leftJoin("NOVA_INVENTARIO", "inv", "v.VAR_VARIANTE = inv.VAR_VARIANTE")
+        .leftJoin("NOVA_ALMACEN", "a", "inv.ALM_ALMACEN = a.ALM_ALMACEN")
+        .where("v.VAR_ACTIVO = 1")
+        .andWhere("p.PRODU_ACTIVO = 1");
 }
 
 /**
  * GET /nova-inventario o /nova-inventario/general
- * Retorna: Nombre del Producto, SKU, Talla, Color, Almacén y Cantidad actual
+ * Retorna: Nombre del Producto, SKU, Talla, Color, Almacén y Cantidad actual (incluyendo productos nuevos en 0)
  */
 export const getInventarioGeneral = async (req: Request, res: Response): Promise<void> => {
     try {
         const query = getInventarioBaseQuery()
-            .orderBy('p.producto_nombre', "ASC")
-            .addOrderBy('v.variante_sku', "ASC");
+            .orderBy('p.PRODU_NOMBRE', "ASC")
+            .addOrderBy('v.VAR_SKU', "ASC");
 
         const data = await query.getRawMany();
 
@@ -44,13 +47,14 @@ export const getInventarioGeneral = async (req: Request, res: Response): Promise
         const result = data.map((row) => ({
             producto_nombre:        row.producto_nombre,
             producto_id:            row.producto_id,
+            variante_id:            row.variante_id,
             variante_sku:           row.variante_sku,
             variante_talla:         row.variante_talla,
             variante_color:         row.variante_color,
             almacen_nombre:         row.almacen_nombre,
             almacen_id:             row.almacen_id,
             inventario_cantidad:    Number(row.inventario_cantidad ?? 0),
-            variante_stock_minimo:  row.variante_stock_minimo != null ? Number(row.variante_stock_minimo) : 0,
+            variante_stock_minimo:  Number(row.variante_stock_minimo ?? 0),
             inventario_id:          row.inventario_id
         }));
 
@@ -63,30 +67,43 @@ export const getInventarioGeneral = async (req: Request, res: Response): Promise
 
 /**
  * GET /nova-inventario/alertas
- * Retorna SOLO las filas donde INV_CANTIDAD sea menor o igual a VAR_STOCK_MINIMO
+ * Retorna las filas donde INV_CANTIDAD sea menor o igual a VAR_STOCK_MINIMO
+ * (incluye automáticamente productos nuevos que tienen stock 0)
  */
 export const getAlertasInventario = async (req: Request, res: Response): Promise<void> => {
     try {
         const query = getInventarioBaseQuery()
-            .where("inv.INV_CANTIDAD <= NVL(v.VAR_STOCK_MINIMO, 0)")
-            .orderBy("inv.INV_CANTIDAD", "ASC")
-            .addOrderBy("p.producto_nombre", "ASC");
+            .andWhere("NVL(inv.INV_CANTIDAD, 0) <= NVL(v.VAR_STOCK_MINIMO, 0)")
+            .orderBy("NVL(inv.INV_CANTIDAD, 0)", "ASC")
+            .addOrderBy("p.PRODU_NOMBRE", "ASC");
 
         const data = await query.getRawMany();
 
-        const result = data.map((row) => ({
-            producto_nombre:        row.producto_nombre,
-            producto_id:            row.producto_id,
-            variante_sku:           row.variante_sku,
-            variante_talla:         row.variante_talla,
-            variante_color:         row.variante_color,
-            almacen_nombre:         row.almacen_nombre,
-            almacen_id:             row.almacen_id,
-            inventario_cantidad:    Number(row.inventario_cantidad ?? 0),
-            variante_stock_minimo:  row.variante_stock_minimo != null ? Number(row.variante_stock_minimo) : 0,
-            inventario_id:          row.inventario_id,
-            diferencia:             (row.variante_stock_minimo != null ? Number(row.variante_stock_minimo) : 0) - Number(row.inventario_cantidad ?? 0)
-        }));
+        const result = data.map((row) => {
+            const stockActual = Number(row.inventario_cantidad ?? 0);
+            const stockMinimo = Number(row.variante_stock_minimo ?? 0);
+            const diferencia = stockMinimo - stockActual;
+
+            return {
+                producto_nombre:        row.producto_nombre,
+                producto_id:            row.producto_id,
+                variante_id:            row.variante_id,
+                variante_sku:           row.variante_sku,
+                variante_talla:         row.variante_talla,
+                variante_color:         row.variante_color,
+                almacen_nombre:         row.almacen_nombre,
+                almacen_id:             row.almacen_id,
+                inventario_cantidad:    stockActual,
+                variante_stock_minimo:  stockMinimo,
+                inventario_id:          row.inventario_id,
+                diferencia:             diferencia,
+                solicitar_orden_compra: true,
+                nivel_alerta:           stockActual === 0 ? "CRITICO_SIN_STOCK" : "STOCK_MINIMO",
+                mensaje:                stockActual === 0
+                    ? `Stock agotado (0 unidades) para "${row.producto_nombre}" (SKU: ${row.variante_sku}). Solicitar orden de compra urgente.`
+                    : `Stock actual (${stockActual}) menor o igual al mínimo (${stockMinimo}) para "${row.producto_nombre}" (SKU: ${row.variante_sku}). Solicitar orden de compra.`
+            };
+        });
 
         res.json(result);
     } catch (error) {

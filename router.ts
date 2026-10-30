@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, requirePermission, requirePermissionByMethod } from "./src/middlewares/auth";
+import { authenticate, requirePermission, requirePermissionByMethod, requireRole } from "./src/middlewares/auth";
 
 // Rutas
 import authRoutes       from "./src/routes/auth.routes";
@@ -14,7 +14,11 @@ import novaVarianteRoutes  from "./src/routes/novaVariante.routes";
 import novaProveedorRoutes from "./src/routes/novaProveedor.routes";
 import novaCompraRoutes    from "./src/routes/novaCompra.routes";
 import novaInventarioRoutes from "./src/routes/novaInventario.routes";
-import novaVentaRoutes      from "./src/routes/novaVenta.routes";
+import novaVentaRoutes        from "./src/routes/novaVenta.routes";
+import novaPedidoRoutes       from "./src/routes/novaPedido.routes";
+import novaFacturacionRoutes  from "./src/routes/novaFacturacion.routes";
+import novaReporteRoutes      from "./src/routes/novaReporte.routes";
+import novaAuditoriaRoutes    from "./src/routes/novaAuditoria.routes";
 
 const router = Router();
 
@@ -90,8 +94,24 @@ router.use("/nova-proveedor",
     }),
     novaProveedorRoutes
 );
+router.use("/proveedores",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaProveedorRoutes
+);
 
 router.use("/nova-compra",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaCompraRoutes
+);
+router.use("/compras",
     authenticate,
     requirePermissionByMethod({
         lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
@@ -108,6 +128,14 @@ router.use("/nova-inventario",
     }),
     novaInventarioRoutes
 );
+router.use("/inventario",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_GESTIONAR"]
+    }),
+    novaInventarioRoutes
+);
 
 router.use("/nova-venta",
     authenticate,
@@ -116,6 +144,38 @@ router.use("/nova-venta",
         escritura: ["PRODUCTOS_GESTIONAR"]
     }),
     novaVentaRoutes
+);
+
+// Módulo de Pedidos (POST /pedidos, PUT /pedidos/:id/aprobar, GET /pedidos)
+router.use("/pedidos", novaPedidoRoutes);
+router.use("/nova-pedido", novaPedidoRoutes);
+
+// Módulo de Facturación (POST /ventas/facturar/:idPedido)
+router.use("/ventas",
+    authenticate,
+    requirePermissionByMethod({
+        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
+        escritura: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"]
+    }),
+    novaFacturacionRoutes
+);
+
+// Módulo de Reportes
+router.use("/reportes",
+    authenticate,
+    novaReporteRoutes
+);
+
+// Módulo de Auditoría (Solo Admin)
+router.use("/auditoria",
+    authenticate,
+    requireRole("ADMIN"),
+    novaAuditoriaRoutes
+);
+router.use("/nova-auditoria",
+    authenticate,
+    requireRole("ADMIN"),
+    novaAuditoriaRoutes
 );
 
 export default router;

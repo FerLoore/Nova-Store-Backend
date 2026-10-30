@@ -259,14 +259,47 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
 
         const usuarioId = req.user?.usuario_id || compra.usuario_id || 1;
 
-        // Transacción atómica: Actualizar estado, registrar movimientos y sincronizar stock
+        // Transacción atómica: Actualizar estado, registrar movimientos y sincronizar stock exactamente una vez
         await AppDataSource.transaction(async (manager) => {
-            // 1. Cambiar estado a RECIBIDA
-            compra.compra_estado = "RECIBIDA";
-            await manager.save(NovaCompra, compra);
+            // Protección contra ejecución doble concurrente: recargar compra dentro de la transacción
+            const compraTx = await manager.findOne(NovaCompra, {
+                where: { compra_id: id }
+            });
 
-            // 2. Por cada detalle de la compra, insertar en NOVA_MOVIMIENTO_INVENTARIO y actualizar NOVA_INVENTARIO
+            if (!compraTx) {
+                throw new Error("Compra no encontrada");
+            }
+            if (compraTx.compra_estado === "RECIBIDA") {
+                throw new Error("Esta compra ya ha sido recibida previamente");
+            }
+            if (compraTx.compra_estado === "CANCELADA") {
+                throw new Error("No se puede recibir una compra cancelada");
+            }
+
+            // Validar que no existan ya movimientos registrados para esta compra (evita doble inserción)
+            const existingMovs = await manager.count(NovaMovimientoInventario, {
+                where: {
+                    movimiento_tipo_documento: "COMPRA",
+                    movimiento_documento_id: id
+                }
+            });
+            if (existingMovs > 0) {
+                throw new Error(`Esta compra #${id} ya cuenta con movimientos de inventario registrados. Se previene la ejecución duplicada.`);
+            }
+
+            // 1. Cambiar estado a RECIBIDA
+            compraTx.compra_estado = "RECIBIDA";
+            await manager.save(NovaCompra, compraTx);
+
+            // 2. Por cada detalle de la compra, registrar movimiento de ENTRADA
+            // y garantizar que el incremento de stock se aplique exactamente 1 vez (evita duplicación)
             for (const det of compra.detalles!) {
+                // Consultar stock antes del movimiento
+                const invAntes = await manager.findOne(NovaInventario, {
+                    where: { variante_id: det.variante_id, almacen_id: almacenId! }
+                });
+                const stockAntes = invAntes ? Number(invAntes.inventario_cantidad || 0) : 0;
+
                 const mov = manager.create(NovaMovimientoInventario, {
                     variante_id: det.variante_id,
                     almacen_id: almacenId!,
@@ -280,20 +313,26 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
                 });
                 await manager.save(NovaMovimientoInventario, mov);
 
-                // 3. Actualizar o insertar en NOVA_INVENTARIO
-                let inv = await manager.findOne(NovaInventario, {
+                // Comprobar si el trigger de base de datos TRG_MOVI_INVENTARIO actualizó automáticamente el stock
+                const invDespues = await manager.findOne(NovaInventario, {
                     where: { variante_id: det.variante_id, almacen_id: almacenId! }
                 });
-                if (inv) {
-                    inv.inventario_cantidad = Number(inv.inventario_cantidad || 0) + Number(det.detalle_cantidad);
-                    await manager.save(NovaInventario, inv);
-                } else {
-                    inv = manager.create(NovaInventario, {
-                        variante_id: det.variante_id,
-                        almacen_id: almacenId!,
-                        inventario_cantidad: Number(det.detalle_cantidad)
-                    });
-                    await manager.save(NovaInventario, inv);
+                const stockDespues = invDespues ? Number(invDespues.inventario_cantidad || 0) : 0;
+
+                // Si el trigger no existe o no modificó el stock, actualizar manualmente exactamente una vez (+ det.detalle_cantidad).
+                // Si el trigger ya lo incrementó, NO sumar nuevamente para prevenir duplicación (ej. 70 + 70 = 140).
+                if (stockDespues === stockAntes) {
+                    if (invDespues) {
+                        invDespues.inventario_cantidad = stockAntes + Number(det.detalle_cantidad);
+                        await manager.save(NovaInventario, invDespues);
+                    } else {
+                        const nuevoInv = manager.create(NovaInventario, {
+                            variante_id: det.variante_id,
+                            almacen_id: almacenId!,
+                            inventario_cantidad: Number(det.detalle_cantidad)
+                        });
+                        await manager.save(NovaInventario, nuevoInv);
+                    }
                 }
             }
         });
@@ -314,13 +353,13 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
 
         res.json({
             ok: true,
-            message: `Compra #${id} recibida exitosamente. Se registraron los movimientos de entrada al inventario.`,
+            message: `Compra #${id} recibida exitosamente. Se registraron los movimientos de entrada al inventario sin duplicaciones.`,
             compra: compraActualizada
         });
     } catch (error: any) {
         console.error("ERROR RECIBIENDO COMPRA:", error);
-        res.status(500).json({ 
-            message: "Error al recibir la compra y registrar movimientos de inventario",
+        res.status(400).json({ 
+            message: error?.message || "Error al recibir la compra y registrar movimientos de inventario",
             error: error?.message || String(error)
         });
     }

@@ -29,6 +29,8 @@ function buildMenu(permisos: string[]) {
         { clave: "compras",     etiqueta: "Compras",           ruta: "/compras",     permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
         { clave: "inventario",  etiqueta: "Inventario",        ruta: "/inventario",  permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
         { clave: "ventas",      etiqueta: "Ventas",            ruta: "/ventas",      permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "pedidos",     etiqueta: "Nuevo Pedido",      ruta: "/pedidos",     permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR", "CLIENTES_GESTIONAR"] },
+        { clave: "aprobaciones", etiqueta: "Aprobaciones",     ruta: "/pedidos/aprobaciones", permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR", "ROLES_GESTIONAR", "USUARIOS_GESTIONAR"] },
     ];
 
     return MENU_ITEMS

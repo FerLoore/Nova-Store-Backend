@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { AppDataSource } from "../config/data-source";
 import { parseIntId } from "../utils/validation";
 
@@ -66,22 +66,22 @@ export const getReporteTopProductos = async (req: Request, res: Response): Promi
                 SELECT 
                     p.PRODU_PRODUCTO AS "producto_id",
                     p.PRODU_NOMBRE AS "producto_nombre",
-                    c.CAT_NOMBRE AS "categoria_nombre",
-                    m.MARC_NOMBRE AS "marca_nombre",
+                    c.CATE_NOMBRE AS "categoria_nombre",
+                    m.MAR_NOMBRE AS "marca_nombre",
                     SUM(dv.DETVEN_CANTIDAD) AS "total_cantidad",
                     SUM(dv.DETVEN_SUBTOTAL) AS "total_recaudado"
                 FROM NOVA_DETALLE_VENTA dv
                 JOIN NOVA_VARIANTE v ON dv.VAR_VARIANTE = v.VAR_VARIANTE
                 JOIN NOVA_PRODUCTO p ON v.PRODU_PRODUCTO = p.PRODU_PRODUCTO
-                LEFT JOIN NOVA_CATEGORIA c ON p.CAT_CATEGORIA = c.CAT_CATEGORIA
-                LEFT JOIN NOVA_MARCA m ON p.MARC_MARCA = m.MARC_MARCA
+                LEFT JOIN NOVA_CATEGORIA c ON p.CATE_CATEGORIA = c.CATE_CATEGORIA
+                LEFT JOIN NOVA_MARCA m ON p.MAR_MARCA = m.MAR_MARCA
                 JOIN NOVA_VENTA vent ON dv.VENT_VENTA = vent.VENT_VENTA
                 WHERE vent.VENT_ESTADO = 'COMPLETADA'
-                GROUP BY p.PRODU_PRODUCTO, p.PRODU_NOMBRE, c.CAT_NOMBRE, m.MARC_NOMBRE
+                GROUP BY p.PRODU_PRODUCTO, p.PRODU_NOMBRE, c.CATE_NOMBRE, m.MAR_NOMBRE
                 ORDER BY SUM(dv.DETVEN_CANTIDAD) DESC
             )
-            WHERE ROWNUM <= :lim
-        `, [limit]);
+            WHERE ROWNUM <= ${limit}
+        `);
 
         const formatted = rows.map((r: any) => ({
             producto_id: Number(r.producto_id),
@@ -117,16 +117,16 @@ export const getReporteStockBajo = async (req: Request, res: Response): Promise<
                 NVL(v.VAR_STOCK_MINIMO, :umbralDefault) AS "stock_minimo",
                 v.VAR_PRECIO_VENTA AS "precio_venta",
                 p.PRODU_NOMBRE AS "producto_nombre",
-                c.CAT_NOMBRE AS "categoria",
+                c.CATE_NOMBRE AS "categoria",
                 NVL(SUM(i.INV_CANTIDAD), 0) AS "stock_actual"
             FROM NOVA_VARIANTE v
             JOIN NOVA_PRODUCTO p ON v.PRODU_PRODUCTO = p.PRODU_PRODUCTO
-            LEFT JOIN NOVA_CATEGORIA c ON p.CAT_CATEGORIA = c.CAT_CATEGORIA
+            LEFT JOIN NOVA_CATEGORIA c ON p.CATE_CATEGORIA = c.CATE_CATEGORIA
             LEFT JOIN NOVA_INVENTARIO i ON v.VAR_VARIANTE = i.VAR_VARIANTE
             WHERE v.VAR_ACTIVO = 1
             GROUP BY 
                 v.VAR_VARIANTE, v.VAR_SKU, v.VAR_COLOR, v.VAR_TALLA, 
-                v.VAR_STOCK_MINIMO, v.VAR_PRECIO_VENTA, p.PRODU_NOMBRE, c.CAT_NOMBRE
+                v.VAR_STOCK_MINIMO, v.VAR_PRECIO_VENTA, p.PRODU_NOMBRE, c.CATE_NOMBRE
             HAVING NVL(SUM(i.INV_CANTIDAD), 0) <= NVL(v.VAR_STOCK_MINIMO, :umbralFiltro)
             ORDER BY "stock_actual" ASC
         `, [umbral, umbral]);

@@ -109,6 +109,7 @@ El servidor levanta en `http://localhost:3000`.
 | `ROLES_GESTIONAR` | `/nova-rol`, `/nova-permiso` |
 | `CLIENTES_GESTIONAR` | `/nova-cliente` |
 | `PRODUCTOS_VER` o `PRODUCTOS_GESTIONAR` | `/nova-marca`, `/nova-categoria`, `/nova-producto`, `/nova-variante`, `/nova-proveedor`, `/nova-compra`, `/nova-inventario` |
+| `PEDIDOS_APROBAR` | `PUT /pedidos/:id/aprobar` |
 | Autenticado | `/pedidos`, `/nova-pedido`, `/ventas`, `/reportes` |
 | Rol `ADMINISTRADOR` | `/auditoria` |
 
@@ -123,6 +124,7 @@ El servidor levanta en `http://localhost:3000`.
 | `CLIENTES_GESTIONAR` | Crear, editar y consultar clientes |
 | `PRODUCTOS_GESTIONAR` | Crear/editar productos, compras e inventario |
 | `PRODUCTOS_VER` | Consultar productos, inventario y variantes |
+| `PEDIDOS_APROBAR` | Aprobar o autorizar pedidos con descuento especial |
 
 ---
 

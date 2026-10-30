@@ -5,7 +5,7 @@ import {
     getPedidos,
     getPedidoById
 } from "../handles/novaPedido.handler";
-import { authenticate, requireRole } from "../middlewares/auth";
+import { authenticate, requirePermission } from "../middlewares/auth";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ router.get("/:id", getPedidoById);
 // Lógica: Si PED_DESCUENTO > 0 -> 'ESPERANDO_APROBACION'; si 0 -> 'APROBADO'
 router.post("/", crearPedido);
 
-// Aprobar pedido: Protegido por roles 'GERENTE' o 'ADMIN'
-router.put("/:id/aprobar", requireRole("GERENTE", "ADMIN"), aprobarPedido);
+// Aprobar pedido: requiere permiso PEDIDOS_APROBAR (asignado a ADMINISTRADOR y SUPERVISOR)
+router.put("/:id/aprobar", requirePermission("PEDIDOS_APROBAR"), aprobarPedido);
 
 export default router;

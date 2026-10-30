@@ -21,16 +21,22 @@ function getSecret(): string {
 /** Construye el menú filtrado por permisos del usuario. */
 function buildMenu(permisos: string[]) {
     const MENU_ITEMS = [
-        { clave: "usuarios",  etiqueta: "Usuarios",         ruta: "/usuarios",  permiso: "USUARIOS_GESTIONAR" },
-        { clave: "roles",     etiqueta: "Roles y permisos",  ruta: "/roles",     permiso: "ROLES_GESTIONAR" },
-        { clave: "clientes",    etiqueta: "Clientes",          ruta: "/clientes",    permiso: "CLIENTES_GESTIONAR" },
-        { clave: "productos",   etiqueta: "Productos",         ruta: "/productos",   permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        { clave: "proveedores", etiqueta: "Proveedores",       ruta: "/proveedores", permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        { clave: "compras",     etiqueta: "Compras",           ruta: "/compras",     permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        { clave: "inventario",  etiqueta: "Inventario",        ruta: "/inventario",  permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        { clave: "ventas",      etiqueta: "Ventas",            ruta: "/ventas",      permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        { clave: "pedidos",     etiqueta: "Nuevo Pedido",      ruta: "/pedidos",     permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR", "CLIENTES_GESTIONAR"] },
-        { clave: "aprobaciones", etiqueta: "Aprobaciones",     ruta: "/pedidos/aprobaciones", permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR", "ROLES_GESTIONAR", "USUARIOS_GESTIONAR"] },
+        // Administración
+        { clave: "usuarios",     etiqueta: "Usuarios",         ruta: "/usuarios",             permiso: "USUARIOS_GESTIONAR" },
+        { clave: "roles",        etiqueta: "Roles y permisos", ruta: "/roles",                permiso: "ROLES_GESTIONAR" },
+        // Catálogos — visibles a cualquiera con acceso a productos
+        { clave: "clientes",     etiqueta: "Clientes",         ruta: "/clientes",             permiso: "CLIENTES_GESTIONAR" },
+        { clave: "productos",    etiqueta: "Productos",        ruta: "/productos",            permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        { clave: "inventario",   etiqueta: "Inventario",       ruta: "/inventario",           permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
+        // Solo gestores (requiere escribir, no solo leer)
+        { clave: "proveedores",  etiqueta: "Proveedores",      ruta: "/proveedores",          permiso: "PRODUCTOS_GESTIONAR" },
+        { clave: "compras",      etiqueta: "Compras",          ruta: "/compras",              permiso: "PRODUCTOS_GESTIONAR" },
+        { clave: "ventas",       etiqueta: "Ventas",           ruta: "/ventas",               permiso: ["PRODUCTOS_GESTIONAR", "CLIENTES_GESTIONAR"] },
+        { clave: "pedidos",      etiqueta: "Nuevo Pedido",     ruta: "/pedidos",              permiso: "CLIENTES_GESTIONAR" },
+        // Aprobaciones: solo para quien puede aprobar pedidos con descuento
+        { clave: "aprobaciones", etiqueta: "Aprobaciones",     ruta: "/pedidos/aprobaciones", permiso: "PEDIDOS_APROBAR" },
+        // Reportes: para gestores y aprobadores
+        { clave: "reportes",     etiqueta: "Reportes",         ruta: "/reportes",             permiso: ["PRODUCTOS_GESTIONAR", "CLIENTES_GESTIONAR", "PEDIDOS_APROBAR"] },
     ];
 
     return MENU_ITEMS
@@ -40,6 +46,7 @@ function buildMenu(permisos: string[]) {
         })
         .map(({ clave, etiqueta, ruta }) => ({ clave, etiqueta, ruta }));
 }
+
 
 // POST /auth/login
 export const login = async (req: Request, res: Response): Promise<void> => {

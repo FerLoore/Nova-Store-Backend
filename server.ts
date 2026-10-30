@@ -36,19 +36,31 @@ app.use("/reports", express.static("public/reports"));
 // Rutas
 app.use("/", router);
 
-// 404
-app.use((_req: Request, res: Response) => {
-    res.status(404).json({ message: "Ruta no encontrada" });
+// 404 - Ruta no encontrada
+app.use((req: Request, res: Response) => {
+    res.status(404).json({
+        ok: false,
+        message: `Ruta ${req.method} ${req.originalUrl} no encontrada`,
+        error: "NOT_FOUND"
+    });
 });
 
 // Manejador de errores global
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     if (err.type === "entity.parse.failed") {
-        res.status(400).json({ message: "El cuerpo de la solicitud no es un JSON válido" });
+        res.status(400).json({
+            ok: false,
+            message: "El cuerpo de la solicitud no es un JSON válido",
+            error: "INVALID_JSON"
+        });
         return;
     }
-    console.error("ERROR NO CONTROLADO:", err);
-    res.status(500).json({ message: "Error interno del servidor" });
+    console.error(`❌ ERROR NO CONTROLADO en ${req.method} ${req.originalUrl}:`, err);
+    res.status(500).json({
+        ok: false,
+        message: "Error interno del servidor",
+        error: process.env.NODE_ENV === "production" ? undefined : (err?.message ?? String(err))
+    });
 });
 
 export default app;

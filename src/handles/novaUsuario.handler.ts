@@ -72,7 +72,7 @@ export const createUsuario = async (req: Request, res: Response): Promise<void> 
         if (!nombre) errors.push("usuario_nombre es obligatorio");
         if (nombre && nombre.length > 100) errors.push("usuario_nombre máximo 100 caracteres");
 
-        const email = trimOrNull(usuario_email);
+        const email = trimOrNull(usuario_email)?.toLowerCase();
         if (!email || !isValidEmail(email)) errors.push("usuario_email debe ser un correo válido (máx. 120)");
 
         const password = trimOrNull(usuario_password);
@@ -134,7 +134,7 @@ export const updateUsuario = async (req: Request, res: Response): Promise<void> 
             else usuario.usuario_nombre = n;
         }
         if (usuario_email !== undefined) {
-            const e = trimOrNull(usuario_email);
+            const e = trimOrNull(usuario_email)?.toLowerCase();
             if (!e || !isValidEmail(e)) errors.push("usuario_email debe ser un correo válido");
             else usuario.usuario_email = e;
         }

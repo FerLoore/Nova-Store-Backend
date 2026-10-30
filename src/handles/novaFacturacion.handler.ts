@@ -127,6 +127,22 @@ export const facturarPedido = async (req: Request, res: Response): Promise<void>
         const totalVenta = round2(Number(pedido.pedido_total));
 
         const result = await AppDataSource.transaction(async (manager) => {
+            // Protección contra concurrencia: validar que el pedido siga en estado APROBADO dentro de la transacción
+            const pedidoTx = await manager.findOne(NovaPedido, { where: { pedido_id: pedido.pedido_id } });
+            if (!pedidoTx || pedidoTx.pedido_estado !== "APROBADO") {
+                throw new Error(`CONCURRENCIA: El pedido #${pedido.pedido_id} ya fue procesado o no se encuentra APROBADO (estado: ${pedidoTx?.pedido_estado ?? 'INEXISTENTE'})`);
+            }
+
+            // Verificación atómica de stock disponible dentro de la transacción
+            for (const det of detalles) {
+                const varianteId = Number(det.variante_id);
+                const cantNecesaria = Number(det.detalle_cantidad);
+                const invRows = await manager.find(NovaInventario, { where: { variante_id: varianteId } });
+                const stockTotal = invRows.reduce((acc, r) => acc + Number(r.inventario_cantidad ?? 0), 0);
+                if (stockTotal < cantNecesaria) {
+                    throw new Error(`STOCK_INSUFICIENTE: Stock insuficiente para variante #${varianteId}. Requerido: ${cantNecesaria}, Disponible: ${stockTotal}`);
+                }
+            }
 
             // 4a. Insertar NOVA_VENTA
             const nuevaVenta = manager.create(NovaVenta, {

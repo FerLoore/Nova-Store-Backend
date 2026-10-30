@@ -57,9 +57,9 @@ export const createProveedor = async (req: Request, res: Response): Promise<void
         } = req.body;
 
         const nombre = trimOrNull(proveedor_nombre ?? PROV_NOMBRE);
-        const rucNit = trimOrNull(proveedor_ruc_nit ?? PROV_RUC_NIT);
+        const rucNit = trimOrNull(proveedor_ruc_nit ?? PROV_RUC_NIT)?.toUpperCase() ?? null;
         const telefono = trimOrNull(proveedor_telefono ?? PROV_TELEFONO);
-        const correo = trimOrNull(proveedor_correo ?? PROV_CORREO);
+        const correo = trimOrNull(proveedor_correo ?? PROV_CORREO)?.toLowerCase() ?? null;
         const direccion = trimOrNull(proveedor_direccion ?? PROV_DIRECCION);
 
         const errors: string[] = [];
@@ -163,7 +163,7 @@ export const updateProveedor = async (req: Request, res: Response): Promise<void
         }
 
         if (inRucNit !== undefined) {
-            const r = trimOrNull(inRucNit);
+            const r = trimOrNull(inRucNit)?.toUpperCase() ?? null;
             if (r && r.length > 30) {
                 res.status(400).json({ message: "El RUC/NIT no puede superar los 30 caracteres" });
                 return;
@@ -187,7 +187,7 @@ export const updateProveedor = async (req: Request, res: Response): Promise<void
         }
 
         if (inCorreo !== undefined) {
-            const c = trimOrNull(inCorreo);
+            const c = trimOrNull(inCorreo)?.toLowerCase() ?? null;
             if (c) {
                 if (c.length > 120) {
                     res.status(400).json({ message: "El correo no puede superar los 120 caracteres" });

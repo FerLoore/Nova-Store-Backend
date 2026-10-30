@@ -188,6 +188,17 @@ USING (SELECT 3 AS id, 'Zapatos'    AS nombre FROM DUAL) src
 ON (c.CAT_CATEGORIA = src.id)
 WHEN NOT MATCHED THEN INSERT (CAT_CATEGORIA, CAT_NOMBRE, CAT_ACTIVO) VALUES (src.id, src.nombre, 1);
 
+-- -----------------------------------------------------------------------------
+-- 6. CORRECCION DE TRIGGERS — Prevenir duplicacion de inventario
+-- -----------------------------------------------------------------------------
+-- Deshabilita TRG_MOVI_ACTUALIZA_INV si existe (el trigger activo y correcto es TRG_MOVI_INVENTARIO)
+BEGIN
+    EXECUTE IMMEDIATE 'ALTER TRIGGER TRG_MOVI_ACTUALIZA_INV DISABLE';
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END;
+/
+
 COMMIT;
 
 -- =============================================================================

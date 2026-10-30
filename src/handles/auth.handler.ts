@@ -53,8 +53,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     try {
         const { usuario_email, usuario_password } = req.body;
 
+        const emailNormalizado = String(usuario_email).trim().toLowerCase();
+
         // Validaciones básicas
-        if (!usuario_email || !isValidEmail(String(usuario_email))) {
+        if (!emailNormalizado || !isValidEmail(emailNormalizado)) {
             res.status(400).json({ message: "Formato de email inválido" });
             return;
         }
@@ -65,7 +67,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         const repo = AppDataSource.getRepository(NovaUsuario);
         const usuario = await repo.findOne({
-            where: { usuario_email: String(usuario_email) },
+            where: { usuario_email: emailNormalizado },
             relations: { rol: { permisos: true } }
         });
 

@@ -12,13 +12,13 @@ function validateClienteFields(body: any, required = true) {
     if (required && !nombre) errors.push("cliente_nombre es obligatorio");
     if (nombre && nombre.length > 120) errors.push("cliente_nombre máximo 120 caracteres");
 
-    const correo = trimOrNull(body.cliente_correo);
+    const correo = trimOrNull(body.cliente_correo)?.toLowerCase() ?? null;
     if (correo && !isValidEmail(correo)) errors.push("Formato de correo inválido");
 
     const telefono = trimOrNull(body.cliente_telefono);
     if (telefono && !isValidPhone(telefono)) errors.push("Formato de teléfono inválido");
 
-    const dpi = trimOrNull(body.cliente_dpi_nit);
+    const dpi = trimOrNull(body.cliente_dpi_nit)?.toUpperCase() ?? null;
     if (dpi && dpi.length > 30) errors.push("cliente_dpi_nit máximo 30 caracteres");
 
     const direccion = trimOrNull(body.cliente_direccion);

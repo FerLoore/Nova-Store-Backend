@@ -162,7 +162,7 @@ export const getReportePedidos = async (_req: Request, res: Response): Promise<v
                 PED_ESTADO AS "estado",
                 COUNT(PED_PEDIDO) AS "cantidad",
                 NVL(SUM(PED_TOTAL), 0) AS "total_pedidos",
-                NVL(SUM(PED_DESCUENTO), 0) AS "total_descuentos",
+                0 AS "total_descuentos",
                 ROUND(NVL(AVG(PED_TOTAL), 0), 2) AS "ticket_promedio"
             FROM NOVA_PEDIDO
             GROUP BY PED_ESTADO

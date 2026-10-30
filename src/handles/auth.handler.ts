@@ -11,7 +11,7 @@ const DUMMY_HASH = "$2b$10$dummy.hash.to.prevent.timing.attacks.xxxxxxxxxxxxxxxx
 
 /** Lee JWT_SECRET de forma perezosa y valida mínimo 16 caracteres. */
 function getSecret(): string {
-    const secret = process.env.JWT_SECRET || "super_secret_nova_store_key_2026_jwt_token";
+    const secret = process.env.JWT_SECRET;
     if (!secret || secret.length < 16) {
         throw new Error("JWT_SECRET debe tener al menos 16 caracteres en .env");
     }

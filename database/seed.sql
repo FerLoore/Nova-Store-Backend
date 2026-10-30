@@ -2,7 +2,7 @@
 -- NOVA STORE — Script de Datos Iniciales (SEED)
 -- Base de datos: Oracle 21c
 -- Esquema: AS_II
--- Ejecutar como: AS_II o con privilegios suficientes
+-- Ejecutar como: AS_II o usuario propietario de las tablas
 -- IDEMPOTENTE: usa MERGE, puede ejecutarse varias veces sin duplicar datos
 -- =============================================================================
 
@@ -76,7 +76,6 @@ COMMIT;
 --    OPERADOR       -> CLIENTES_GESTIONAR (3), PRODUCTOS_GESTIONAR (4), PRODUCTOS_VER (5)
 --    SUPERVISOR     -> PRODUCTOS_VER (5), PEDIDOS_APROBAR (6)
 -- -----------------------------------------------------------------------------
--- Limpia asignaciones previas para re-insertar (idempotente)
 DELETE FROM NOVA_ROL_PERMISO WHERE ROL_ROL IN (1, 2, 3);
 
 INSERT INTO NOVA_ROL_PERMISO (ROL_ROL, PERM_PERMISO) VALUES (1, 1); -- ADMIN -> USUARIOS_GESTIONAR
@@ -96,60 +95,54 @@ INSERT INTO NOVA_ROL_PERMISO (ROL_ROL, PERM_PERMISO) VALUES (3, 6); -- SUPERVISO
 COMMIT;
 
 -- -----------------------------------------------------------------------------
--- 4. USUARIOS INICIALES (contrasenas hasheadas con bcrypt, 10 rounds)
+-- 4. USUARIOS INICIALES (contraseñas hasheadas con bcrypt, 10 rounds)
 --    admin@novastore.com      -> Admin1234!
 --    operador@novastore.com   -> Operador1234!
 --    supervisor@novastore.com -> Supervisor1234!
---
---    Para regenerar un hash:
---    node -e "require('bcryptjs').hash('NuevaPassword', 10).then(console.log)"
 -- -----------------------------------------------------------------------------
 MERGE INTO NOVA_USUARIO u
-USING (SELECT 1 AS id FROM DUAL) src
-ON (u.USU_USUARIO = src.id)
+USING (SELECT 'admin@novastore.com' AS email, 1 AS rol_id, 'Administrador Principal' AS nombre,
+              '$2b$10$fdAeVoDTC/Fx0rbguAnoNeyZysZwVzHh61n3C9558lJBM7h3qlSfq' AS pass FROM DUAL) src
+ON (u.USU_EMAIL = src.email)
 WHEN MATCHED THEN UPDATE SET
-    u.ROL_ROL      = 1,
-    u.USU_NOMBRE   = 'Administrador Principal',
-    u.USU_EMAIL    = 'admin@novastore.com',
-    u.USU_PASSWORD = '$2b$10$fdAeVoDTC/Fx0rbguAnoNeyZysZwVzHh61n3C9558lJBM7h3qlSfq',
+    u.ROL_ROL      = src.rol_id,
+    u.USU_NOMBRE   = src.nombre,
+    u.USU_PASSWORD = src.pass,
     u.USU_ACTIVO   = 1
 WHEN NOT MATCHED THEN INSERT (USU_USUARIO, ROL_ROL, USU_NOMBRE, USU_EMAIL, USU_PASSWORD, USU_ACTIVO)
-VALUES (1, 1, 'Administrador Principal', 'admin@novastore.com',
-        '$2b$10$fdAeVoDTC/Fx0rbguAnoNeyZysZwVzHh61n3C9558lJBM7h3qlSfq', 1);
+VALUES (1, src.rol_id, src.nombre, src.email, src.pass, 1);
 
 MERGE INTO NOVA_USUARIO u
-USING (SELECT 4 AS id FROM DUAL) src
-ON (u.USU_USUARIO = src.id)
+USING (SELECT 'operador@novastore.com' AS email, 2 AS rol_id, 'Carlos Castillo' AS nombre,
+              '$2b$10$/84kSR0iNm1LJ5Ee3GuET.jxYzJeNRp9kUjAOH5eh6pW1d/wKeAdK' AS pass FROM DUAL) src
+ON (u.USU_EMAIL = src.email)
 WHEN MATCHED THEN UPDATE SET
-    u.ROL_ROL      = 2,
-    u.USU_NOMBRE   = 'Carlos Castillo',
-    u.USU_EMAIL    = 'operador@novastore.com',
-    u.USU_PASSWORD = '$2b$10$/84kSR0iNm1LJ5Ee3GuET.jxYzJeNRp9kUjAOH5eh6pW1d/wKeAdK',
+    u.ROL_ROL      = src.rol_id,
+    u.USU_NOMBRE   = src.nombre,
+    u.USU_PASSWORD = src.pass,
     u.USU_ACTIVO   = 1
 WHEN NOT MATCHED THEN INSERT (USU_USUARIO, ROL_ROL, USU_NOMBRE, USU_EMAIL, USU_PASSWORD, USU_ACTIVO)
-VALUES (4, 2, 'Carlos Castillo', 'operador@novastore.com',
-        '$2b$10$/84kSR0iNm1LJ5Ee3GuET.jxYzJeNRp9kUjAOH5eh6pW1d/wKeAdK', 1);
+VALUES (2, src.rol_id, src.nombre, src.email, src.pass, 1);
 
 MERGE INTO NOVA_USUARIO u
-USING (SELECT 5 AS id FROM DUAL) src
-ON (u.USU_USUARIO = src.id)
+USING (SELECT 'supervisor@novastore.com' AS email, 3 AS rol_id, 'Supervisor General' AS nombre,
+              '$2b$10$q67s1PkNNoH1nzhEl9RTz.1/PCkZTd1kWjC2ew75TTjxFnWemYLn.' AS pass FROM DUAL) src
+ON (u.USU_EMAIL = src.email)
 WHEN MATCHED THEN UPDATE SET
-    u.ROL_ROL      = 3,
-    u.USU_NOMBRE   = 'Supervisor General',
-    u.USU_EMAIL    = 'supervisor@novastore.com',
-    u.USU_PASSWORD = '$2b$10$q67s1PkNNoH1nzhEl9RTz.1/PCkZTd1kWjC2ew75TTjxFnWemYLn.',
+    u.ROL_ROL      = src.rol_id,
+    u.USU_NOMBRE   = src.nombre,
+    u.USU_PASSWORD = src.pass,
     u.USU_ACTIVO   = 1
 WHEN NOT MATCHED THEN INSERT (USU_USUARIO, ROL_ROL, USU_NOMBRE, USU_EMAIL, USU_PASSWORD, USU_ACTIVO)
-VALUES (5, 3, 'Supervisor General', 'supervisor@novastore.com',
-        '$2b$10$q67s1PkNNoH1nzhEl9RTz.1/PCkZTd1kWjC2ew75TTjxFnWemYLn.', 1);
+VALUES (3, src.rol_id, src.nombre, src.email, src.pass, 1);
 
 COMMIT;
 
 -- -----------------------------------------------------------------------------
--- 5. DATOS DE PRUEBA — Almacen, Marcas, Categorias
+-- 5. DATOS DE PRUEBA — Almacén, Marcas, Categorías, Cliente, Producto, Variante e Inventario
 -- -----------------------------------------------------------------------------
 
--- Almacen principal
+-- Almacén principal
 MERGE INTO NOVA_ALMACEN a
 USING (SELECT 1 AS id FROM DUAL) src
 ON (a.ALM_ALMACEN = src.id)
@@ -158,21 +151,21 @@ VALUES (1, 'Almacen Central', 'Bodega Principal - Piso 1');
 
 -- Marcas
 MERGE INTO NOVA_MARCA m
-USING (SELECT 1 AS id, 'Zara'  AS nombre FROM DUAL) src
+USING (SELECT 1 AS id, 'Nike'  AS nombre FROM DUAL) src
 ON (m.MARC_MARCA = src.id)
 WHEN NOT MATCHED THEN INSERT (MARC_MARCA, MARC_NOMBRE, MARC_ACTIVO) VALUES (src.id, src.nombre, 1);
 
 MERGE INTO NOVA_MARCA m
-USING (SELECT 2 AS id, 'H&M'   AS nombre FROM DUAL) src
+USING (SELECT 2 AS id, 'Zara'  AS nombre FROM DUAL) src
 ON (m.MARC_MARCA = src.id)
 WHEN NOT MATCHED THEN INSERT (MARC_MARCA, MARC_NOMBRE, MARC_ACTIVO) VALUES (src.id, src.nombre, 1);
 
 MERGE INTO NOVA_MARCA m
-USING (SELECT 3 AS id, 'Nike'  AS nombre FROM DUAL) src
+USING (SELECT 3 AS id, 'H&M'   AS nombre FROM DUAL) src
 ON (m.MARC_MARCA = src.id)
 WHEN NOT MATCHED THEN INSERT (MARC_MARCA, MARC_NOMBRE, MARC_ACTIVO) VALUES (src.id, src.nombre, 1);
 
--- Categorias
+-- Categorías
 MERGE INTO NOVA_CATEGORIA c
 USING (SELECT 1 AS id, 'Camisetas'  AS nombre FROM DUAL) src
 ON (c.CAT_CATEGORIA = src.id)
@@ -187,6 +180,37 @@ MERGE INTO NOVA_CATEGORIA c
 USING (SELECT 3 AS id, 'Zapatos'    AS nombre FROM DUAL) src
 ON (c.CAT_CATEGORIA = src.id)
 WHEN NOT MATCHED THEN INSERT (CAT_CATEGORIA, CAT_NOMBRE, CAT_ACTIVO) VALUES (src.id, src.nombre, 1);
+
+-- Cliente de prueba
+MERGE INTO NOVA_CLIENTE cli
+USING (SELECT 1 AS id FROM DUAL) src
+ON (cli.CLI_CLIENTE = src.id)
+WHEN NOT MATCHED THEN INSERT (CLI_CLIENTE, CLI_NOMBRE, CLI_DPI_NIT, CLI_TELEFONO, CLI_CORREO, CLI_DIRECCION, CLI_ACTIVO)
+VALUES (1, 'Maria Lopez', '1002003004001', '+502 5555-1234', 'maria.lopez@example.com', 'Zona 14, Ciudad de Guatemala', 1);
+
+-- Producto de prueba
+MERGE INTO NOVA_PRODUCTO p
+USING (SELECT 1 AS id FROM DUAL) src
+ON (p.PRODU_PRODUCTO = src.id)
+WHEN NOT MATCHED THEN INSERT (PRODU_PRODUCTO, CAT_CATEGORIA, MARC_MARCA, PRODU_NOMBRE, PRODU_DESCRIPCION, PRODU_ACTIVO)
+VALUES (1, 1, 1, 'Polera Deportiva Dri-FIT', 'Camiseta deportiva ligera y transpirable de alto rendimiento', 1);
+
+-- Variante de prueba con regla de precio (venta > compra)
+MERGE INTO NOVA_VARIANTE v
+USING (SELECT 1 AS id FROM DUAL) src
+ON (v.VAR_VARIANTE = src.id)
+WHEN NOT MATCHED THEN INSERT (VAR_VARIANTE, PRODU_PRODUCTO, VAR_TALLA, VAR_COLOR, VAR_SKU, VAR_PRECIO_COMPRA, VAR_PRECIO_VENTA, VAR_STOCK_MINIMO, VAR_ACTIVO)
+VALUES (1, 1, 'M', 'Negro', 'NIK-DRI-M-NEG', 15.00, 29.99, 5, 1);
+
+-- Stock inicial en almacén 1 (50 unidades)
+MERGE INTO NOVA_INVENTARIO inv
+USING (SELECT 1 AS v_id, 1 AS alm_id FROM DUAL) src
+ON (inv.VAR_VARIANTE = src.v_id AND inv.ALM_ALMACEN = src.alm_id)
+WHEN MATCHED THEN UPDATE SET inv.INV_CANTIDAD = 50
+WHEN NOT MATCHED THEN INSERT (VAR_VARIANTE, ALM_ALMACEN, INV_CANTIDAD)
+VALUES (src.v_id, src.alm_id, 50);
+
+COMMIT;
 
 -- -----------------------------------------------------------------------------
 -- 6. CORRECCION DE TRIGGERS — Prevenir duplicacion de inventario

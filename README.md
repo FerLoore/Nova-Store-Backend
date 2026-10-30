@@ -108,11 +108,27 @@ El servidor levanta en `http://localhost:3000`.
 | `USUARIOS_GESTIONAR` | `/nova-usuario` |
 | `ROLES_GESTIONAR` | `/nova-rol`, `/nova-permiso` |
 | `CLIENTES_GESTIONAR` | `/nova-cliente` |
-| `PRODUCTOS_VER` o `PRODUCTOS_GESTIONAR` | `/nova-marca`, `/nova-categoria`, `/nova-producto`, `/nova-variante`, `/nova-proveedor`, `/nova-compra`, `/nova-inventario` |
+| `PRODUCTOS_VER` o `PRODUCTOS_GESTIONAR` | `/nova-marca`, `/nova-categoria`, `/nova-producto`, `/nova-variante`, `/nova-proveedor`, `/nova-compra` |
+| `PRODUCTOS_VER` o `PRODUCTOS_GESTIONAR` | `/nova-inventario`, `/nova-inventario/alertas`, `/nova-inventario/kardex` (Kárdex físico con filtros por variante, almacén y fechas) |
+| `PRODUCTOS_GESTIONAR` | `POST /nova-inventario/ajuste` (Ajustes manuales por conteo/merma con trazabilidad y auditoría) |
 | `PEDIDOS_APROBAR` | `PUT /pedidos/:id/aprobar` |
 | Autenticado | `/pedidos`, `/nova-pedido`, `/ventas` |
 | Autenticado (Reportes) | `/reportes/kpis`, `/reportes/ventas`, `/reportes/top-productos`, `/reportes/stock-bajo`, `/reportes/pedidos`, `/reportes/compras`, `/reportes/metodos-pago` |
 | Rol `ADMINISTRADOR` | `/auditoria`, `/auditoria/resumen` (soporta filtros `?tabla=&accion=&usuario_id=&desde=&hasta=&page=&limit=`) |
+
+---
+
+## Reglas de Negocio Implementadas
+
+- **Regla de Precios:**
+  - Todo producto/variante debe tener `precio_venta > 0`.
+  - Si tiene `precio_compra`, no puede ser negativo (`>= 0`).
+  - `precio_venta >= precio_compra`: No se permite registrar ni actualizar variantes cuyo precio de venta sea inferior al costo de compra para prevenir pérdidas comerciales.
+  - Al recibir una orden de compra en estado `RECIBIDA`, el precio de compra de la variante se actualiza automáticamente con el último costo de reposición negociado.
+- **Kárdex de Inventario:**
+  - Registra cronológicamente cada `ENTRADA` (Compras y Ajustes positivos) y `SALIDA` (Ventas facturadas y Ajustes negativos).
+  - Cálculo automático del saldo físico acumulado (running balance) por variante y almacén.
+  - Validación estricta que impide salidas si el stock disponible es insuficiente.
 
 ---
 

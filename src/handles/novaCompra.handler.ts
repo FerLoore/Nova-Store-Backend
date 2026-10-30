@@ -335,6 +335,13 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
                         await manager.save(NovaInventario, nuevoInv);
                     }
                 }
+
+                // Actualizar el costo de reposición / precio de compra de la variante
+                if (det.detalle_precio_unitario && Number(det.detalle_precio_unitario) > 0) {
+                    await manager.update(NovaVariante, { variante_id: det.variante_id }, {
+                        variante_precio_compra: round2(Number(det.detalle_precio_unitario))
+                    });
+                }
             }
 
             // 3. Registrar en auditoría global

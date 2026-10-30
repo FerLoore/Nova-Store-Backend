@@ -33,11 +33,20 @@ export function validateVarianteInput(v: any) {
         errors.push("variante_precio_venta es obligatorio");
     }
     const pv = Number(rawPv);
-    if (isNaN(pv) || pv < 0) errors.push("variante_precio_venta debe ser un número >= 0");
+    if (isNaN(pv) || pv <= 0) {
+        errors.push("variante_precio_venta debe ser un número mayor a 0");
+    }
 
     const rawPc = v.variante_precio_compra ?? v.VAR_PRECIO_COMPRA;
     const pc = rawPc !== undefined && rawPc !== null && rawPc !== "" ? Number(rawPc) : null;
-    if (pc !== null && (isNaN(pc) || pc < 0)) errors.push("variante_precio_compra debe ser un número >= 0");
+    if (pc !== null && (isNaN(pc) || pc < 0)) {
+        errors.push("variante_precio_compra debe ser un número mayor o igual a 0");
+    }
+
+    // Regla de Negocio: El precio de venta no puede ser inferior al precio de compra/costo
+    if (pc !== null && !isNaN(pc) && !isNaN(pv) && pv > 0 && pv < pc) {
+        errors.push(`Regla de precios: El precio de venta (${round2(pv)}) no puede ser menor al precio de costo/compra (${round2(pc)})`);
+    }
 
     const rawSm = v.variante_stock_minimo ?? v.VAR_STOCK_MINIMO;
     const sm = rawSm !== undefined && rawSm !== null && rawSm !== "" ? Number(rawSm) : 0;
@@ -418,8 +427,8 @@ export const updateVariante = async (req: Request, res: Response): Promise<void>
         // Validar y actualizar Precio de Venta
         if (inPv !== undefined) {
             const pv = Number(inPv);
-            if (isNaN(pv) || pv < 0) {
-                res.status(400).json({ message: "variante_precio_venta debe ser un número >= 0" });
+            if (isNaN(pv) || pv <= 0) {
+                res.status(400).json({ message: "variante_precio_venta debe ser un número mayor a 0" });
                 return;
             }
             variante.variante_precio_venta = round2(pv);
@@ -429,10 +438,22 @@ export const updateVariante = async (req: Request, res: Response): Promise<void>
         if (inPc !== undefined) {
             const pc = inPc === null || inPc === "" ? null : Number(inPc);
             if (pc !== null && (isNaN(pc) || pc < 0)) {
-                res.status(400).json({ message: "variante_precio_compra debe ser un número >= 0" });
+                res.status(400).json({ message: "variante_precio_compra debe ser un número mayor o igual a 0" });
                 return;
             }
             variante.variante_precio_compra = pc !== null ? round2(pc) : null;
+        }
+
+        // Regla de Negocio: El precio de venta no puede ser menor al precio de compra
+        if (
+            variante.variante_precio_compra !== null &&
+            variante.variante_precio_compra !== undefined &&
+            variante.variante_precio_venta < variante.variante_precio_compra
+        ) {
+            res.status(400).json({
+                message: `Regla de precios: El precio de venta (${variante.variante_precio_venta}) no puede ser menor al precio de costo/compra (${variante.variante_precio_compra})`
+            });
+            return;
         }
 
         // Validar y actualizar Stock Mínimo

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { AppDataSource } from "../config/data-source";
 import { NovaUsuario } from "../entities/novaUsuario";
 import { parseIntId, isValidEmail, trimOrNull, getOraCode } from "../utils/validation";
+import { registrarAuditoria } from "../utils/audit";
 
 const repo = () => AppDataSource.getRepository(NovaUsuario);
 
@@ -90,6 +91,15 @@ export const createUsuario = async (req: Request, res: Response): Promise<void> 
             usuario_activo:   1
         });
         const result = await repo().save(usuario);
+
+        await registrarAuditoria({
+            tabla: "NOVA_USUARIO",
+            accion: "INSERT",
+            campo: "USU_USUARIO",
+            valorDespues: `Usuario ID ${result.usuario_id} (${result.usuario_email})`,
+            usuarioId: req.user?.usuario_id
+        });
+
         res.status(201).json(sanitizeUsuario(result));
     } catch (error: any) {
         console.error("ERROR CREANDO USUARIO:", error);
@@ -137,6 +147,15 @@ export const updateUsuario = async (req: Request, res: Response): Promise<void> 
         if (errors.length) { res.status(400).json({ message: errors.join("; ") }); return; }
 
         const result = await repo().save(usuario);
+
+        await registrarAuditoria({
+            tabla: "NOVA_USUARIO",
+            accion: "UPDATE",
+            campo: "USU_USUARIO",
+            valorDespues: `Usuario ID ${id} actualizado`,
+            usuarioId: req.user?.usuario_id
+        });
+
         res.json(sanitizeUsuario(result));
     } catch (error: any) {
         console.error("ERROR ACTUALIZANDO USUARIO:", error);
@@ -163,6 +182,16 @@ export const deleteUsuario = async (req: Request, res: Response): Promise<void> 
 
         usuario.usuario_activo = 0;
         await repo().save(usuario);
+
+        await registrarAuditoria({
+            tabla: "NOVA_USUARIO",
+            accion: "UPDATE",
+            campo: "USU_ACTIVO",
+            valorAntes: "1",
+            valorDespues: "0",
+            usuarioId: req.user?.usuario_id
+        });
+
         res.json({ ok: true, message: "Usuario desactivado correctamente" });
     } catch (error) {
         console.error("ERROR DESACTIVANDO USUARIO:", error);

@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { getAuditorias } from "../handles/novaAuditoria.handler";
+import { getAuditorias, getResumenAuditoria } from "../handles/novaAuditoria.handler";
 
 const router = Router();
 
+router.get("/resumen", getResumenAuditoria);
 router.get("/", getAuditorias);
 
 export default router;

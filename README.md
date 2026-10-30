@@ -110,8 +110,9 @@ El servidor levanta en `http://localhost:3000`.
 | `CLIENTES_GESTIONAR` | `/nova-cliente` |
 | `PRODUCTOS_VER` o `PRODUCTOS_GESTIONAR` | `/nova-marca`, `/nova-categoria`, `/nova-producto`, `/nova-variante`, `/nova-proveedor`, `/nova-compra`, `/nova-inventario` |
 | `PEDIDOS_APROBAR` | `PUT /pedidos/:id/aprobar` |
-| Autenticado | `/pedidos`, `/nova-pedido`, `/ventas`, `/reportes` |
-| Rol `ADMINISTRADOR` | `/auditoria` |
+| Autenticado | `/pedidos`, `/nova-pedido`, `/ventas` |
+| Autenticado (Reportes) | `/reportes/kpis`, `/reportes/ventas`, `/reportes/top-productos`, `/reportes/stock-bajo`, `/reportes/pedidos`, `/reportes/compras`, `/reportes/metodos-pago` |
+| Rol `ADMINISTRADOR` | `/auditoria`, `/auditoria/resumen` (soporta filtros `?tabla=&accion=&usuario_id=&desde=&hasta=&page=&limit=`) |
 
 ---
 

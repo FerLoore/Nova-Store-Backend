@@ -9,6 +9,7 @@ import { NovaMovimientoInventario } from "../entities/novaMovimientoInventario";
 import { NovaInventario } from "../entities/novaInventario";
 import { NovaAlmacen } from "../entities/novaAlmacen";
 import { parseIntId, round2 } from "../utils/validation";
+import { registrarAuditoria } from "../utils/audit";
 
 const METODOS_PAGO_VALIDOS = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"] as const;
 
@@ -180,6 +181,26 @@ export const facturarPedido = async (req: Request, res: Response): Promise<void>
             // 7. Actualizar pedido a FACTURADO
             await manager.update(NovaPedido, { pedido_id: pedido.pedido_id }, {
                 pedido_estado: "FACTURADO"
+            });
+
+            // 8. Registrar auditoría global de la facturación
+            await registrarAuditoria({
+                tabla: "NOVA_VENTA",
+                accion: "INSERT",
+                campo: "VENT_VENTA",
+                valorDespues: `Venta #${ventaId} generada desde Pedido #${pedido.pedido_id} por total ${totalVenta}`,
+                usuarioId,
+                manager
+            });
+
+            await registrarAuditoria({
+                tabla: "NOVA_PEDIDO",
+                accion: "UPDATE",
+                campo: "PED_ESTADO",
+                valorAntes: pedido.pedido_estado,
+                valorDespues: "FACTURADO",
+                usuarioId,
+                manager
             });
 
             return { ventaId };

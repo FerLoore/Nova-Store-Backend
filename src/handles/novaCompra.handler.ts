@@ -8,6 +8,7 @@ import { NovaVariante } from "../entities/novaVariante";
 import { NovaAlmacen } from "../entities/novaAlmacen";
 import { NovaInventario } from "../entities/novaInventario";
 import { parseIntId, round2 } from "../utils/validation";
+import { registrarAuditoria } from "../utils/audit";
 
 const compraRepo = () => AppDataSource.getRepository(NovaCompra);
 const proveedorRepo = () => AppDataSource.getRepository(NovaProveedor);
@@ -335,6 +336,17 @@ export const recibirCompra = async (req: Request, res: Response): Promise<void> 
                     }
                 }
             }
+
+            // 3. Registrar en auditoría global
+            await registrarAuditoria({
+                tabla: "NOVA_COMPRA",
+                accion: "UPDATE",
+                campo: "COMP_ESTADO",
+                valorAntes: "SOLICITADA",
+                valorDespues: "RECIBIDA",
+                usuarioId,
+                manager
+            });
         });
 
         // Recargar compra actualizada

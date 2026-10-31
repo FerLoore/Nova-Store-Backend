@@ -1,13 +1,13 @@
 import { Router } from "express";
-import { authenticate, requirePermission, requirePermissionByMethod, requireRole } from "./src/middlewares/auth";
+import { authenticate, requirePermiso, requirePermisoByMethod } from "./src/middlewares/auth";
 
 // Rutas
-import authRoutes       from "./src/routes/auth.routes";
-import novaMarcaRoutes  from "./src/routes/novaMarca.routes";
-import novaRolRoutes    from "./src/routes/novaRol.routes";
-import novaUsuarioRoutes from "./src/routes/novaUsuario.routes";
-import novaPermisoRoutes from "./src/routes/novaPermiso.routes";
-import novaClienteRoutes from "./src/routes/novaCliente.routes";
+import authRoutes          from "./src/routes/auth.routes";
+import novaMarcaRoutes     from "./src/routes/novaMarca.routes";
+import novaRolRoutes       from "./src/routes/novaRol.routes";
+import novaUsuarioRoutes   from "./src/routes/novaUsuario.routes";
+import novaPermisoRoutes   from "./src/routes/novaPermiso.routes";
+import novaClienteRoutes   from "./src/routes/novaCliente.routes";
 import novaCategoriaRoutes from "./src/routes/novaCategoria.routes";
 import novaProductoRoutes  from "./src/routes/novaProducto.routes";
 import novaVarianteRoutes  from "./src/routes/novaVariante.routes";
@@ -25,156 +25,129 @@ const router = Router();
 // Rutas públicas
 router.use("/auth", authRoutes);
 
-// Rutas protegidas
+// ── USUARIOS ────────────────────────────────────────────────────────────────
 router.use("/nova-usuario",
     authenticate,
-    requirePermission("USUARIOS_GESTIONAR"),
+    requirePermisoByMethod("USUARIOS"),
     novaUsuarioRoutes
 );
 
+// ── ROLES y PERMISOS ────────────────────────────────────────────────────────
 router.use("/nova-rol",
     authenticate,
-    requirePermission("ROLES_GESTIONAR"),
+    requirePermisoByMethod("ROLES"),
     novaRolRoutes
 );
 
 router.use("/nova-permiso",
     authenticate,
-    requirePermission("ROLES_GESTIONAR"),
+    requirePermisoByMethod("ROLES"),
     novaPermisoRoutes
 );
 
+// ── CLIENTES ────────────────────────────────────────────────────────────────
 router.use("/nova-cliente",
     authenticate,
-    requirePermission("CLIENTES_GESTIONAR"),
+    requirePermisoByMethod("CLIENTES"),
     novaClienteRoutes
 );
 
+// ── PRODUCTOS (catálogo, variantes, marcas, categorías) ─────────────────────
 router.use("/nova-marca",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("PRODUCTOS"),
     novaMarcaRoutes
 );
 
 router.use("/nova-categoria",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("PRODUCTOS"),
     novaCategoriaRoutes
 );
 
 router.use("/nova-producto",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("PRODUCTOS"),
     novaProductoRoutes
 );
 
 router.use("/nova-variante",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("PRODUCTOS"),
     novaVarianteRoutes
 );
 
+// ── COMPRAS (proveedores + órdenes de compra) ───────────────────────────────
 router.use("/nova-proveedor",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("COMPRAS"),
     novaProveedorRoutes
 );
 router.use("/proveedores",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("COMPRAS"),
     novaProveedorRoutes
 );
 
 router.use("/nova-compra",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("COMPRAS"),
     novaCompraRoutes
 );
 router.use("/compras",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("COMPRAS"),
     novaCompraRoutes
 );
 
+// ── INVENTARIO ──────────────────────────────────────────────────────────────
 router.use("/nova-inventario",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("INVENTARIO"),
     novaInventarioRoutes
 );
 router.use("/inventario",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("INVENTARIO"),
     novaInventarioRoutes
 );
 
+// ── VENTAS (venta directa + facturación) ────────────────────────────────────
 router.use("/nova-venta",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("VENTAS"),
     novaVentaRoutes
 );
 
-// Módulo de Pedidos (POST /pedidos, PUT /pedidos/:id/aprobar, GET /pedidos)
-router.use("/pedidos", novaPedidoRoutes);
-router.use("/nova-pedido", novaPedidoRoutes);
-
-// Módulo de Facturación (POST /ventas/facturar/:idPedido)
 router.use("/ventas",
     authenticate,
-    requirePermissionByMethod({
-        lectura:   ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"],
-        escritura: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"]
-    }),
+    requirePermisoByMethod("VENTAS"),
     novaFacturacionRoutes
 );
 
-// Módulo de Reportes
+// ── PEDIDOS y APROBACIONES ──────────────────────────────────────────────────
+// Nota: requirePermiso se aplica por ruta dentro de novaPedido.routes.ts
+// GET/POST  -> PEDIDOS / LECTURA o ESCRITURA según método
+// PUT /:id/aprobar -> APROBACIONES / ESCRITURA
+router.use("/pedidos", novaPedidoRoutes);
+router.use("/nova-pedido", novaPedidoRoutes);
+
+// ── REPORTES ────────────────────────────────────────────────────────────────
 router.use("/reportes",
     authenticate,
+    requirePermiso("REPORTES", "LECTURA"),
     novaReporteRoutes
 );
 
-// Módulo de Auditoría (Solo Admin)
+// ── AUDITORÍA ────────────────────────────────────────────────────────────────
 router.use("/auditoria",
     authenticate,
-    requireRole("ADMIN"),
+    requirePermiso("AUDITORIA", "LECTURA"),
     novaAuditoriaRoutes
 );
 router.use("/nova-auditoria",
     authenticate,
-    requireRole("ADMIN"),
+    requirePermiso("AUDITORIA", "LECTURA"),
     novaAuditoriaRoutes
 );
 

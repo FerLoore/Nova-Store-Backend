@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { AppDataSource } from "../config/data-source";
 import { NovaUsuario } from "../entities/novaUsuario";
 import { NovaRol } from "../entities/novaRol";
+import { NovaRolModulo, MODULOS_VALIDOS, NivelModulo, NombreModulo } from "../entities/novaRolModulo";
 import { isValidEmail, trimOrNull, getOraCode } from "../utils/validation";
 
 // Hash falso para igualar tiempos cuando el usuario no existe
@@ -18,35 +19,50 @@ function getSecret(): string {
     return secret;
 }
 
-/** Construye el menú filtrado por permisos del usuario. */
-function buildMenu(permisos: string[]) {
+/** Construye el mapa módulo→nivel para el rol dado. */
+async function buildPermisosModulo(rolId: number): Promise<Record<NombreModulo, NivelModulo>> {
+    const mapa: Partial<Record<NombreModulo, NivelModulo>> = {};
+    for (const mod of MODULOS_VALIDOS) mapa[mod] = "NINGUNO";
+
+    // ADMINISTRADOR: bypass total
+    if (rolId === 1) {
+        for (const mod of MODULOS_VALIDOS) mapa[mod] = "ESCRITURA";
+        return mapa as Record<NombreModulo, NivelModulo>;
+    }
+
+    const filas = await AppDataSource.getRepository(NovaRolModulo).find({
+        where: { rmo_rol: rolId }
+    });
+    for (const fila of filas) {
+        if (MODULOS_VALIDOS.includes(fila.rmo_modulo as NombreModulo)) {
+            mapa[fila.rmo_modulo as NombreModulo] = fila.rmo_nivel;
+        }
+    }
+    return mapa as Record<NombreModulo, NivelModulo>;
+}
+
+/** Construye el menú según el mapa de permisos por módulo. */
+function buildMenuFromModulos(permisosModulo: Record<NombreModulo, NivelModulo>) {
     const MENU_ITEMS = [
-        // Administración
-        { clave: "usuarios",     etiqueta: "Usuarios",         ruta: "/usuarios",             permiso: "USUARIOS_GESTIONAR" },
-        { clave: "roles",        etiqueta: "Roles y permisos", ruta: "/roles",                permiso: "ROLES_GESTIONAR" },
-        // Catálogos — visibles a cualquiera con acceso a productos
-        { clave: "clientes",     etiqueta: "Clientes",         ruta: "/clientes",             permiso: "CLIENTES_GESTIONAR" },
-        { clave: "productos",    etiqueta: "Productos",        ruta: "/productos",            permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        { clave: "inventario",   etiqueta: "Inventario",       ruta: "/inventario",           permiso: ["PRODUCTOS_VER", "PRODUCTOS_GESTIONAR"] },
-        // Solo gestores (requiere escribir, no solo leer)
-        { clave: "proveedores",  etiqueta: "Proveedores",      ruta: "/proveedores",          permiso: "PRODUCTOS_GESTIONAR" },
-        { clave: "compras",      etiqueta: "Compras",          ruta: "/compras",              permiso: "PRODUCTOS_GESTIONAR" },
-        { clave: "ventas",       etiqueta: "Ventas",           ruta: "/ventas",               permiso: ["PRODUCTOS_GESTIONAR", "CLIENTES_GESTIONAR"] },
-        { clave: "pedidos",      etiqueta: "Nuevo Pedido",     ruta: "/pedidos",              permiso: "CLIENTES_GESTIONAR" },
-        // Aprobaciones: solo para quien puede aprobar pedidos con descuento
-        { clave: "aprobaciones", etiqueta: "Aprobaciones",     ruta: "/pedidos/aprobaciones", permiso: "PEDIDOS_APROBAR" },
-        // Reportes: para gestores y aprobadores
-        { clave: "reportes",     etiqueta: "Reportes",         ruta: "/reportes",             permiso: ["PRODUCTOS_GESTIONAR", "CLIENTES_GESTIONAR", "PEDIDOS_APROBAR"] },
+        { clave: "usuarios",     etiqueta: "Usuarios",          ruta: "/usuarios",             modulo: "USUARIOS" as NombreModulo },
+        { clave: "roles",        etiqueta: "Roles y permisos",  ruta: "/roles",                modulo: "ROLES" as NombreModulo },
+        { clave: "clientes",     etiqueta: "Clientes",          ruta: "/clientes",             modulo: "CLIENTES" as NombreModulo },
+        { clave: "productos",    etiqueta: "Productos",         ruta: "/productos",            modulo: "PRODUCTOS" as NombreModulo },
+        { clave: "marcas",       etiqueta: "Marcas",            ruta: "/marcas",               modulo: "PRODUCTOS" as NombreModulo },
+        { clave: "inventario",   etiqueta: "Inventario",        ruta: "/inventario",           modulo: "INVENTARIO" as NombreModulo },
+        { clave: "proveedores",  etiqueta: "Proveedores",       ruta: "/proveedores",          modulo: "COMPRAS" as NombreModulo },
+        { clave: "compras",      etiqueta: "Compras",           ruta: "/compras",              modulo: "COMPRAS" as NombreModulo },
+        { clave: "pedidos",      etiqueta: "Nuevo Pedido",      ruta: "/pedidos",              modulo: "PEDIDOS" as NombreModulo },
+        { clave: "aprobaciones", etiqueta: "Aprobaciones",      ruta: "/pedidos/aprobaciones", modulo: "APROBACIONES" as NombreModulo },
+        { clave: "ventas",       etiqueta: "Ventas",            ruta: "/ventas",               modulo: "VENTAS" as NombreModulo },
+        { clave: "reportes",     etiqueta: "Reportes",          ruta: "/reportes",             modulo: "REPORTES" as NombreModulo },
+        { clave: "auditoria",    etiqueta: "Auditoría",         ruta: "/auditoria",            modulo: "AUDITORIA" as NombreModulo },
     ];
 
     return MENU_ITEMS
-        .filter((item) => {
-            const needed = Array.isArray(item.permiso) ? item.permiso : [item.permiso];
-            return needed.some((p) => permisos.includes(p));
-        })
+        .filter((item) => (permisosModulo[item.modulo] ?? "NINGUNO") !== "NINGUNO")
         .map(({ clave, etiqueta, ruta }) => ({ clave, etiqueta, ruta }));
 }
-
 
 // POST /auth/login
 export const login = async (req: Request, res: Response): Promise<void> => {
@@ -55,7 +71,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         const emailNormalizado = String(usuario_email).trim().toLowerCase();
 
-        // Validaciones básicas
         if (!emailNormalizado || !isValidEmail(emailNormalizado)) {
             res.status(400).json({ message: "Formato de email inválido" });
             return;
@@ -71,7 +86,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             relations: { rol: { permisos: true } }
         });
 
-        // Comparar siempre para igualar tiempos (timing-safe)
         const hashToCompare = usuario?.usuario_password ?? DUMMY_HASH;
         const passwordOk = await bcrypt.compare(String(usuario_password), hashToCompare);
 
@@ -90,6 +104,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         const permisos = (usuario.rol.permisos ?? []).map((p) => p.permiso_codigo);
+        const permisosModulo = await buildPermisosModulo(usuario.rol.rol_id);
 
         const expiresIn = (process.env.JWT_EXPIRES_IN || "8h") as string;
         const token = jwt.sign(
@@ -98,7 +113,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             { expiresIn } as jwt.SignOptions
         );
 
-        const menu = buildMenu(permisos);
+        const menu = buildMenuFromModulos(permisosModulo);
 
         res.json({
             token,
@@ -108,7 +123,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 usuario_email:  usuario.usuario_email,
                 rol_id:         usuario.rol.rol_id,
                 rol_nombre:     usuario.rol.rol_nombre,
-                permisos
+                permisos,
+                permisosModulo
             },
             menu
         });
@@ -126,7 +142,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 export const me = async (req: Request, res: Response): Promise<void> => {
     try {
         const user = req.user!;
-        const menu = buildMenu(user.permisos);
+        const menu = buildMenuFromModulos(user.permisosModulo);
         res.json({ usuario: user, menu });
     } catch (error) {
         console.error("ERROR /auth/me:", error);
@@ -167,7 +183,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         const usuarioRepo = AppDataSource.getRepository(NovaUsuario);
         const rolRepo = AppDataSource.getRepository(NovaRol);
 
-        // Verificar si el correo ya existe
         const existingUser = await usuarioRepo.findOne({
             where: { usuario_email: email! }
         });
@@ -176,7 +191,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // Asignar rol: rol_id enviado o el rol activo por defecto
         let assignedRolId: number;
         if (rol_id !== undefined && rol_id !== null && rol_id !== "") {
             const parsedRolId = Number(rol_id);
@@ -213,31 +227,34 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
         const savedUser = await usuarioRepo.save(nuevoUsuario);
 
-        // Consultar con rol y permisos para generar token y menú
         const usuarioCompleto = await usuarioRepo.findOne({
             where: { usuario_id: savedUser.usuario_id },
             relations: { rol: { permisos: true } }
         });
 
         const permisos = (usuarioCompleto?.rol?.permisos ?? []).map((p) => p.permiso_codigo);
+        const rolIdFinal = usuarioCompleto?.rol?.rol_id ?? assignedRolId;
+        const permisosModulo = await buildPermisosModulo(rolIdFinal);
+
         const expiresIn = (process.env.JWT_EXPIRES_IN || "8h") as string;
         const token = jwt.sign(
             { sub: savedUser.usuario_id },
             getSecret(),
             { expiresIn } as jwt.SignOptions
         );
-        const menu = buildMenu(permisos);
+        const menu = buildMenuFromModulos(permisosModulo);
 
         res.status(201).json({
             message: "Usuario registrado exitosamente",
             token,
             usuario: {
-                usuario_id: savedUser.usuario_id,
+                usuario_id:     savedUser.usuario_id,
                 usuario_nombre: savedUser.usuario_nombre,
-                usuario_email: savedUser.usuario_email,
-                rol_id: usuarioCompleto?.rol?.rol_id ?? assignedRolId,
-                rol_nombre: usuarioCompleto?.rol?.rol_nombre ?? "",
-                permisos
+                usuario_email:  savedUser.usuario_email,
+                rol_id:         rolIdFinal,
+                rol_nombre:     usuarioCompleto?.rol?.rol_nombre ?? "",
+                permisos,
+                permisosModulo
             },
             menu
         });
@@ -278,4 +295,3 @@ export const getPublicRoles = async (_req: Request, res: Response): Promise<void
         res.status(500).json({ message: "Error obteniendo roles" });
     }
 };
-

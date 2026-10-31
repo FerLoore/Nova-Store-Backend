@@ -5,24 +5,24 @@ import {
     getPedidos,
     getPedidoById
 } from "../handles/novaPedido.handler";
-import { authenticate, requirePermission } from "../middlewares/auth";
+import { authenticate, requirePermiso, requirePermisoByMethod } from "../middlewares/auth";
 
 const router = Router();
 
 // Todas las rutas de pedidos requieren usuario autenticado
 router.use(authenticate);
 
-// Listar pedidos (permite filtro ?estado=ESPERANDO_APROBACION)
-router.get("/", getPedidos);
+// Listar pedidos — PEDIDOS / LECTURA
+router.get("/", requirePermiso("PEDIDOS", "LECTURA"), getPedidos);
 
-// Obtener detalle de pedido por ID
-router.get("/:id", getPedidoById);
+// Obtener detalle de pedido por ID — PEDIDOS / LECTURA
+router.get("/:id", requirePermiso("PEDIDOS", "LECTURA"), getPedidoById);
 
-// Crear nuevo pedido
+// Crear nuevo pedido — PEDIDOS / ESCRITURA
 // Lógica: Si PED_DESCUENTO > 0 -> 'ESPERANDO_APROBACION'; si 0 -> 'APROBADO'
-router.post("/", crearPedido);
+router.post("/", requirePermiso("PEDIDOS", "ESCRITURA"), crearPedido);
 
-// Aprobar pedido: requiere permiso PEDIDOS_APROBAR (asignado a ADMINISTRADOR y SUPERVISOR)
-router.put("/:id/aprobar", requirePermission("PEDIDOS_APROBAR"), aprobarPedido);
+// Aprobar pedido — APROBACIONES / ESCRITURA (módulo diferente, acción específica)
+router.put("/:id/aprobar", requirePermiso("APROBACIONES", "ESCRITURA"), aprobarPedido);
 
 export default router;

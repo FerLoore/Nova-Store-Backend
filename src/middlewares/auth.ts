@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppDataSource } from "../config/data-source";
 import { NovaUsuario } from "../entities/novaUsuario";
+import { NovaRolModulo, NivelModulo, NombreModulo, MODULOS_VALIDOS } from "../entities/novaRolModulo";
 
 // Tipado para req.user
 export interface AuthUser {
@@ -10,7 +11,8 @@ export interface AuthUser {
     usuario_email: string;
     rol_id: number;
     rol_nombre: string;
-    permisos: string[];
+    permisos: string[];                        // legado, se conserva
+    permisosModulo: Record<NombreModulo, NivelModulo>; // nuevo
 }
 
 declare global {
@@ -19,6 +21,66 @@ declare global {
             user?: AuthUser;
         }
     }
+}
+
+// ─── Caché de permisos por módulo por rol ───────────────────────────────────
+const rolModuloCache = new Map<number, Record<NombreModulo, NivelModulo>>();
+
+export function invalidateRolCache(rolId: number): void {
+    rolModuloCache.delete(rolId);
+}
+
+export function invalidateAllRolCache(): void {
+    rolModuloCache.clear();
+}
+
+// ─── Helpers de nivel ───────────────────────────────────────────────────────
+const NIVEL_ORDEN: Record<NivelModulo, number> = {
+    NINGUNO: 0,
+    LECTURA: 1,
+    ESCRITURA: 2
+};
+
+function nivelSuficiente(nivelActual: NivelModulo, nivelMinimo: NivelModulo): boolean {
+    return NIVEL_ORDEN[nivelActual] >= NIVEL_ORDEN[nivelMinimo];
+}
+
+// Mapa de todos los módulos en NINGUNO (base vacía)
+function mapaVacio(): Record<NombreModulo, NivelModulo> {
+    const m: Partial<Record<NombreModulo, NivelModulo>> = {};
+    for (const mod of MODULOS_VALIDOS) m[mod] = "NINGUNO";
+    return m as Record<NombreModulo, NivelModulo>;
+}
+
+// Mapa con todos en ESCRITURA (para ADMINISTRADOR)
+function mapaEscritura(): Record<NombreModulo, NivelModulo> {
+    const m: Partial<Record<NombreModulo, NivelModulo>> = {};
+    for (const mod of MODULOS_VALIDOS) m[mod] = "ESCRITURA";
+    return m as Record<NombreModulo, NivelModulo>;
+}
+
+/** Carga y cachea los permisos por módulo para un rol. */
+async function loadPermisosModulo(rolId: number): Promise<Record<NombreModulo, NivelModulo>> {
+    // ADMINISTRADOR: bypass total
+    if (rolId === 1) return mapaEscritura();
+
+    if (rolModuloCache.has(rolId)) {
+        return rolModuloCache.get(rolId)!;
+    }
+
+    const filas = await AppDataSource.getRepository(NovaRolModulo).find({
+        where: { rmo_rol: rolId }
+    });
+
+    const mapa = mapaVacio();
+    for (const fila of filas) {
+        if (MODULOS_VALIDOS.includes(fila.rmo_modulo as NombreModulo)) {
+            mapa[fila.rmo_modulo as NombreModulo] = fila.rmo_nivel;
+        }
+    }
+
+    rolModuloCache.set(rolId, mapa);
+    return mapa;
 }
 
 /** Lee JWT_SECRET de forma perezosa y valida longitud mínima. */
@@ -40,13 +102,16 @@ async function loadUserFromDb(usuario_id: number): Promise<AuthUser | null> {
 
     if (!usuario || !usuario.rol || usuario.rol.rol_activo !== 1) return null;
 
+    const permisosModulo = await loadPermisosModulo(usuario.rol.rol_id);
+
     return {
         usuario_id: usuario.usuario_id,
         usuario_nombre: usuario.usuario_nombre,
         usuario_email: usuario.usuario_email,
         rol_id: usuario.rol.rol_id,
         rol_nombre: usuario.rol.rol_nombre,
-        permisos: (usuario.rol.permisos ?? []).map((p) => p.permiso_codigo)
+        permisos: (usuario.rol.permisos ?? []).map((p) => p.permiso_codigo),
+        permisosModulo
     };
 }
 
@@ -56,36 +121,77 @@ export const authenticate = async (
     res: Response,
     next: NextFunction
 ): Promise<void> => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        res.status(401).json({ message: "Token de autenticación requerido" });
+    const header = req.headers.authorization;
+    if (!header?.startsWith("Bearer ")) {
+        res.status(401).json({ message: "No autenticado" });
         return;
     }
 
-    const token = authHeader.slice(7);
+    const token = header.slice(7);
+    let payload: { sub?: unknown };
     try {
-        const payload = jwt.verify(token, getSecret()) as unknown as { sub: number };
-        const user = await loadUserFromDb(payload.sub);
-
-        if (!user) {
-            res.status(403).json({ message: "Usuario inactivo o sin rol válido" });
-            return;
-        }
-
-        req.user = user;
-        next();
-    } catch (err: any) {
-        if (err?.name === "TokenExpiredError") {
-            res.status(401).json({ message: "El token ha expirado" });
-        } else if (err?.message?.includes("JWT_SECRET")) {
-            res.status(500).json({ message: "Error de configuración del servidor" });
-        } else {
-            res.status(401).json({ message: "Token inválido" });
-        }
+        payload = jwt.verify(token, getSecret()) as { sub?: unknown };
+    } catch {
+        res.status(401).json({ message: "Token inválido o expirado" });
+        return;
     }
+
+    const usuario_id = Number(payload.sub);
+    if (!Number.isInteger(usuario_id) || usuario_id < 1) {
+        res.status(401).json({ message: "Token malformado" });
+        return;
+    }
+
+    const user = await loadUserFromDb(usuario_id);
+    if (!user) {
+        res.status(401).json({ message: "Usuario inactivo o sin rol válido" });
+        return;
+    }
+
+    req.user = user;
+    next();
 };
 
-/** Middleware: requiere al menos uno de los permisos indicados. */
+// ─── Middleware NUEVO: requirePermiso ───────────────────────────────────────
+/**
+ * Verifica que el usuario tenga al menos nivelMinimo en el módulo dado.
+ * ADMINISTRADOR (rol_id=1) siempre pasa.
+ */
+export const requirePermiso = (modulo: NombreModulo, nivelMinimo: NivelModulo) =>
+    (req: Request, res: Response, next: NextFunction): void => {
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({ message: "No autenticado" });
+            return;
+        }
+        // ADMINISTRADOR bypass total
+        if (user.rol_id === 1) { next(); return; }
+
+        const nivelActual = user.permisosModulo?.[modulo] ?? "NINGUNO";
+        if (!nivelSuficiente(nivelActual, nivelMinimo)) {
+            res.status(403).json({
+                message: `Se requiere nivel ${nivelMinimo} en módulo ${modulo}. Nivel actual: ${nivelActual}`
+            });
+            return;
+        }
+        next();
+    };
+
+/**
+ * Selecciona LECTURA para GET/HEAD, ESCRITURA para el resto.
+ * Nuevo sistema por módulo.
+ */
+export const requirePermisoByMethod = (modulo: NombreModulo) =>
+    (req: Request, res: Response, next: NextFunction): void => {
+        const nivelMinimo: NivelModulo = ["GET", "HEAD"].includes(req.method.toUpperCase())
+            ? "LECTURA"
+            : "ESCRITURA";
+        requirePermiso(modulo, nivelMinimo)(req, res, next);
+    };
+
+// ─── Middlewares LEGADOS (conservados para no romper nada todavía) ──────────
+
+/** @deprecated Usar requirePermiso() en su lugar */
 export const requirePermission = (...codigos: string[]) =>
     (req: Request, res: Response, next: NextFunction): void => {
         const permisos = req.user?.permisos ?? [];
@@ -97,7 +203,7 @@ export const requirePermission = (...codigos: string[]) =>
         next();
     };
 
-/** Middleware: elige permiso según método HTTP. GET/HEAD usan lectura; el resto escritura. */
+/** @deprecated Usar requirePermisoByMethod() en su lugar */
 export const requirePermissionByMethod = (opts: {
     lectura: string[];
     escritura: string[];
@@ -114,7 +220,7 @@ export const requirePermissionByMethod = (opts: {
         next();
     };
 
-/** Middleware: requiere que el rol del usuario coincida con alguno de los roles indicados (ej. 'GERENTE', 'ADMIN'). */
+/** @deprecated Usar requirePermiso() en su lugar */
 export const requireRole = (...roles: string[]) =>
     (req: Request, res: Response, next: NextFunction): void => {
         const userRole = (req.user?.rol_nombre || "").trim().toUpperCase();
@@ -131,4 +237,3 @@ export const requireRole = (...roles: string[]) =>
         }
         next();
     };
-
